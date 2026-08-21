@@ -9,4 +9,8 @@ object GoogleTvSearchTitleExtractor {
     fun isDetailsAction(packageName: String, eventText: List<String>): Boolean =
         packageName == GOOGLE_TV_LAUNCHER_PACKAGE &&
             eventText.any { it.equals("View details", ignoreCase = true) }
+
+    fun isProviderAction(packageName: String, contentDescription: String?): Boolean =
+        packageName == GOOGLE_TV_LAUNCHER_PACKAGE &&
+            contentDescription?.startsWith("Watch now ", ignoreCase = true) == true
 }

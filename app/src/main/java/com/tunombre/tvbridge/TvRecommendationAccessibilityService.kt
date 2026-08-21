@@ -68,15 +68,18 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
                 GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
                 GOOGLE_TV_ASSISTANT_PACKAGE,
-            GOOGLE_SEARCH_PACKAGE,
-            AMAZON_LAUNCHER_PACKAGE
-        )) return
-        if (GoogleTvSearchTitleExtractor.isDetailsAction(
+                GOOGLE_SEARCH_PACKAGE,
+                AMAZON_LAUNCHER_PACKAGE
+            )) return
+        val isSearchRouteAction = GoogleTvSearchTitleExtractor.isDetailsAction(
                 packageName,
                 event.text.map { it.toString() }
+            ) || GoogleTvSearchTitleExtractor.isProviderAction(
+                packageName,
+                event.contentDescription?.toString()
             )
-        ) {
-            handleGoogleTvSearchDetails()
+        if (isSearchRouteAction) {
+            handleGoogleTvSearchRoute()
             return
         }
         val isSearchSelection = eventType == AccessibilityEvent.TYPE_VIEW_SELECTED &&
@@ -124,20 +127,21 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         }, 600)
     }
 
-    private fun handleGoogleTvSearchDetails(attempt: Int = 0) {
-        Handler(Looper.getMainLooper()).postDelayed({
-            val visibleTexts = mutableListOf<String>()
-            rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
-            val title = GoogleTvSearchTitleExtractor.extract(visibleTexts)
-            if (title != null) {
-                Log.d(TAG, "Movie/show detected (Google TV search): $title")
-                handleMovieClick(title)
-            } else if (attempt + 1 < SEARCH_DETAILS_MAX_ATTEMPTS) {
-                handleGoogleTvSearchDetails(attempt + 1)
-            } else {
-                Log.w(TAG, "Unable to read title from Google TV search details")
-            }
-        }, SEARCH_DETAILS_RETRY_DELAY_MS)
+    private fun handleGoogleTvSearchRoute(attempt: Int = 0) {
+        val visibleTexts = mutableListOf<String>()
+        rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+        val title = GoogleTvSearchTitleExtractor.extract(visibleTexts)
+        if (title != null) {
+            Log.d(TAG, "Movie/show detected (Google TV search): $title")
+            handleMovieClick(title)
+        } else if (attempt + 1 < SEARCH_DETAILS_MAX_ATTEMPTS) {
+            Handler(Looper.getMainLooper()).postDelayed(
+                { handleGoogleTvSearchRoute(attempt + 1) },
+                SEARCH_DETAILS_RETRY_DELAY_MS
+            )
+        } else {
+            Log.w(TAG, "Unable to read title from Google TV search details")
+        }
     }
 
     private fun collectVisibleTexts(node: AccessibilityNodeInfo, output: MutableList<String>) {

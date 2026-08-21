@@ -28,4 +28,15 @@ class GoogleTvSearchTitleExtractorTest {
             )
         )
     }
+
+    @Test
+    fun recognizesGoogleTvWatchProviderAction() {
+        assertEquals(
+            true,
+            GoogleTvSearchTitleExtractor.isProviderAction(
+                packageName = "com.google.android.apps.tv.launcherx",
+                contentDescription = "Watch now Hulu"
+            )
+        )
+    }
 }
