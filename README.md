@@ -35,6 +35,8 @@ The debug APK is generated at:
 
 `app/build/outputs/apk/debug/app-debug.apk`
 
+GitHub CI runs the unit tests, assembles the debug APK, and uploads it as the `NuvioBridge-debug` artifact.
+
 ## Enable the Accessibility service
 
 After installing the APK, open NuvioBridge and choose **Enable NuvioBridge in Accessibility**.
