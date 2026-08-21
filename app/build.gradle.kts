@@ -13,11 +13,7 @@ val localProperties = Properties().apply {
 
 android {
     namespace = "com.tunombre.tvbridge"
-    compileSdk {
-        version = release(37) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.tunombre.tvbridge"
