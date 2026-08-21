@@ -55,6 +55,12 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             eventType != AccessibilityEvent.TYPE_VIEW_SELECTED
         ) return
         val packageName = event.packageName?.toString() ?: return
+        Log.d(
+            TAG,
+            "Event type=$eventType package=$packageName class=${event.className} " +
+                "description=${event.contentDescription?.toString()?.take(160)} " +
+                "text=${event.text.joinToString(limit = 3, truncated = "…") { it.toString() }}"
+        )
         if (packageName !in setOf(
                 GOOGLE_TV_LAUNCHER_PACKAGE,
                 LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
