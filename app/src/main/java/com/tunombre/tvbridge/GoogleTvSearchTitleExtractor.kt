@@ -2,6 +2,11 @@ package com.tunombre.tvbridge
 
 object GoogleTvSearchTitleExtractor {
     private const val GOOGLE_TV_LAUNCHER_PACKAGE = "com.google.android.apps.tv.launcherx"
+    private val GOOGLE_TV_SEARCH_PACKAGES = setOf(
+        GOOGLE_TV_LAUNCHER_PACKAGE,
+        "com.google.android.googlequicksearchbox",
+        "com.google.android.tvlauncher"
+    )
     private val SEMANTIC_STOP_WORDS = setOf(
         "about", "after", "their", "there", "these", "those", "watch", "where", "which"
     )
@@ -10,12 +15,14 @@ object GoogleTvSearchTitleExtractor {
         visibleTexts.firstOrNull { it.isNotBlank() }?.trim()
 
     fun isDetailsAction(packageName: String, eventText: List<String>): Boolean =
-        packageName == GOOGLE_TV_LAUNCHER_PACKAGE &&
+        packageName in GOOGLE_TV_SEARCH_PACKAGES &&
             eventText.any { it.equals("View details", ignoreCase = true) }
 
     fun isProviderAction(packageName: String, contentDescription: String?): Boolean =
-        packageName == GOOGLE_TV_LAUNCHER_PACKAGE &&
-            contentDescription?.startsWith("Watch now ", ignoreCase = true) == true
+        packageName in GOOGLE_TV_SEARCH_PACKAGES &&
+            contentDescription?.contains(
+                Regex("\\b(watch now|watch on|play on|available on)\\b", RegexOption.IGNORE_CASE)
+            ) == true
 
     fun homeProviderPlot(packageName: String, eventText: List<String>): String? {
         if (packageName != GOOGLE_TV_LAUNCHER_PACKAGE) return null

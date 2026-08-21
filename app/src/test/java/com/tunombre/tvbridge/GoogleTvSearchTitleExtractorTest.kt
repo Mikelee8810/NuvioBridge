@@ -1,6 +1,7 @@
 package com.tunombre.tvbridge
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GoogleTvSearchTitleExtractorTest {
@@ -36,6 +37,48 @@ class GoogleTvSearchTitleExtractorTest {
             GoogleTvSearchTitleExtractor.isProviderAction(
                 packageName = "com.google.android.apps.tv.launcherx",
                 contentDescription = "Watch now Hulu"
+            )
+        )
+    }
+
+    @Test
+    fun recognizesVoiceSearchWatchProviderAction() {
+        assertTrue(
+            GoogleTvSearchTitleExtractor.isProviderAction(
+                "com.google.android.googlequicksearchbox",
+                "Watch now Hulu"
+            )
+        )
+    }
+
+    @Test
+    fun recognizesAnyStreamingProviderAction() {
+        assertTrue(
+            GoogleTvSearchTitleExtractor.isProviderAction(
+                "com.google.android.googlequicksearchbox",
+                "Watch on Netflix"
+            )
+        )
+        assertTrue(
+            GoogleTvSearchTitleExtractor.isProviderAction(
+                "com.google.android.googlequicksearchbox",
+                "Play on Prime Video"
+            )
+        )
+        assertTrue(
+            GoogleTvSearchTitleExtractor.isProviderAction(
+                "com.google.android.apps.tv.launcherx",
+                "Hulu, Watch now"
+            )
+        )
+    }
+
+    @Test
+    fun recognizesVoiceSearchViewDetailsAction() {
+        assertTrue(
+            GoogleTvSearchTitleExtractor.isDetailsAction(
+                "com.google.android.googlequicksearchbox",
+                listOf("View details")
             )
         )
     }
