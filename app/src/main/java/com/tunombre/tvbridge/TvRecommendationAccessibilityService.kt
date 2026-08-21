@@ -145,7 +145,9 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
 
     private fun isMovieOrShowCard(event: AccessibilityEvent, contentDesc: String): Boolean {
         if (TITLE_MARKERS.any { contentDesc.contains(it) }) return true
-        if (event.className != "android.view.View") return false
+        if (event.className != "android.view.View" &&
+            event.className != "android.view.ViewGroup"
+        ) return false
         if (!event.text.isNullOrEmpty()) return false
         val commaIndex = contentDesc.indexOf(',')
         if (commaIndex <= 0) return false
