@@ -28,6 +28,8 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         private const val GOOGLE_TV_ASSISTANT_PACKAGE = "com.google.android.katniss"
         private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
         private const val FIRE_TV_MAIN_IMAGE_ID = "com.amazon.tv.launcher:id/main_image"
+        private const val SEARCH_DETAILS_RETRY_DELAY_MS = 250L
+        private const val SEARCH_DETAILS_MAX_ATTEMPTS = 8
     }
 
     override fun onServiceConnected() {
@@ -66,9 +68,17 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
                 GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
                 GOOGLE_TV_ASSISTANT_PACKAGE,
-                GOOGLE_SEARCH_PACKAGE,
-                AMAZON_LAUNCHER_PACKAGE
-            )) return
+            GOOGLE_SEARCH_PACKAGE,
+            AMAZON_LAUNCHER_PACKAGE
+        )) return
+        if (GoogleTvSearchTitleExtractor.isDetailsAction(
+                packageName,
+                event.text.map { it.toString() }
+            )
+        ) {
+            handleGoogleTvSearchDetails()
+            return
+        }
         val isSearchSelection = eventType == AccessibilityEvent.TYPE_VIEW_SELECTED &&
             packageName in setOf(GOOGLE_TV_ASSISTANT_PACKAGE, GOOGLE_SEARCH_PACKAGE)
         if (eventType == AccessibilityEvent.TYPE_VIEW_SELECTED && !isSearchSelection) return
@@ -112,6 +122,29 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 }
             }
         }, 600)
+    }
+
+    private fun handleGoogleTvSearchDetails(attempt: Int = 0) {
+        Handler(Looper.getMainLooper()).postDelayed({
+            val visibleTexts = mutableListOf<String>()
+            rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+            val title = GoogleTvSearchTitleExtractor.extract(visibleTexts)
+            if (title != null) {
+                Log.d(TAG, "Movie/show detected (Google TV search): $title")
+                handleMovieClick(title)
+            } else if (attempt + 1 < SEARCH_DETAILS_MAX_ATTEMPTS) {
+                handleGoogleTvSearchDetails(attempt + 1)
+            } else {
+                Log.w(TAG, "Unable to read title from Google TV search details")
+            }
+        }, SEARCH_DETAILS_RETRY_DELAY_MS)
+    }
+
+    private fun collectVisibleTexts(node: AccessibilityNodeInfo, output: MutableList<String>) {
+        node.text?.toString()?.trim()?.takeIf { it.isNotBlank() }?.let(output::add)
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { collectVisibleTexts(it, output) }
+        }
     }
 
     private fun extractSearchTitle(contentDesc: String): String {
