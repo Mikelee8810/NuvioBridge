@@ -31,11 +31,11 @@ CI can also read the key from the `TMDB_API_KEY` environment variable.
 ./gradlew testDebugUnitTest assembleDebug
 ```
 
-The debug APK is generated at:
+The signed release APK is generated at:
 
-`app/build/outputs/apk/debug/app-debug.apk`
+`app/build/outputs/apk/release/app-release.apk`
 
-GitHub CI runs the unit tests, assembles the debug APK, and uploads it as the `NuvioBridge-debug` artifact.
+GitHub CI runs the unit tests, assembles and verifies the signed release APK, and uploads it as the `NuvioBridge-release` artifact. CI build numbers are used as Android version codes so later artifacts install as updates.
 
 ## Enable the Accessibility service
 

@@ -11,6 +11,21 @@ val localProperties = Properties().apply {
     }
 }
 
+fun buildSetting(name: String): String? =
+    localProperties.getProperty(name) ?: System.getenv(name)
+
+val releaseStoreFilePath = buildSetting("RELEASE_STORE_FILE")
+val releaseStorePassword = buildSetting("RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = buildSetting("RELEASE_KEY_ALIAS")
+val releaseKeyPassword = buildSetting("RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
+val ciBuildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+
 android {
     namespace = "com.tunombre.tvbridge"
     compileSdk = 36
@@ -19,8 +34,8 @@ android {
         applicationId = "com.tunombre.tvbridge"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = ciBuildNumber ?: 1
+        versionName = if (ciBuildNumber != null) "1.0.$ciBuildNumber" else "1.0"
 
         buildConfigField(
             "String",
@@ -37,12 +52,11 @@ android {
 
     signingConfigs {
         create("release") {
-            val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE")
-            if (storeFilePath != null) {
-                storeFile = rootProject.file(storeFilePath)
-                storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
-                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
-                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(releaseStoreFilePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -52,7 +66,7 @@ android {
             optimization {
                 enable = false
             }
-            if (localProperties.getProperty("RELEASE_STORE_FILE") != null) {
+            if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
