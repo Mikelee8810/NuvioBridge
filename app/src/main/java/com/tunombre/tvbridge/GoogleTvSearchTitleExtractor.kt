@@ -13,4 +13,20 @@ object GoogleTvSearchTitleExtractor {
     fun isProviderAction(packageName: String, contentDescription: String?): Boolean =
         packageName == GOOGLE_TV_LAUNCHER_PACKAGE &&
             contentDescription?.startsWith("Watch now ", ignoreCase = true) == true
+
+    fun homeProviderPlot(packageName: String, eventText: List<String>): String? {
+        if (packageName != GOOGLE_TV_LAUNCHER_PACKAGE) return null
+        if (!eventText.firstOrNull().equals("Recommended For You", ignoreCase = true)) return null
+        if (!eventText.lastOrNull().equals("Watch Now", ignoreCase = true)) return null
+        return eventText.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    fun semanticResultTitle(query: String, visibleTexts: List<String>): String? {
+        val titlePattern = Regex("^(.+?) \\(\\d{4}\\) (?:is|was)\\b", RegexOption.IGNORE_CASE)
+        return visibleTexts
+            .asSequence()
+            .filterNot { it.equals(query, ignoreCase = true) }
+            .mapNotNull { titlePattern.find(it.trim())?.groupValues?.getOrNull(1) }
+            .firstOrNull()
+    }
 }

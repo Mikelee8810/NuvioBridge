@@ -39,4 +39,35 @@ class GoogleTvSearchTitleExtractorTest {
             )
         )
     }
+
+    @Test
+    fun extractsPlotFromHomeProviderCard() {
+        assertEquals(
+            "Two lighthouse keepers lose their sanity on an island",
+            GoogleTvSearchTitleExtractor.homeProviderPlot(
+                packageName = "com.google.android.apps.tv.launcherx",
+                eventText = listOf(
+                    "Recommended For You",
+                    "Two lighthouse keepers lose their sanity on an island",
+                    "Watch Now"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun extractsTitleFromGoogleTvSemanticSearchResponse() {
+        assertEquals(
+            "The Lighthouse",
+            GoogleTvSearchTitleExtractor.semanticResultTitle(
+                query = "Two lighthouse keepers lose their sanity on an island",
+                visibleTexts = listOf(
+                    "Two lighthouse keepers lose their sanity on an island",
+                    "The Lighthouse (2019) is a psychological horror film starring Robert Pattinson and Willem Dafoe.",
+                    "2019dotHorrordot1 hr 50 min",
+                    "View details"
+                )
+            )
+        )
+    }
 }

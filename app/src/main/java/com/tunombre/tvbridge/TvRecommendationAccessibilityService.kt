@@ -2,6 +2,7 @@ package com.tunombre.tvbridge
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -31,6 +32,9 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         private const val FIRE_TV_MAIN_IMAGE_ID = "com.amazon.tv.launcher:id/main_image"
         private const val SEARCH_DETAILS_RETRY_DELAY_MS = 250L
         private const val SEARCH_DETAILS_MAX_ATTEMPTS = 8
+        private const val HOME_PROVIDER_SEARCH_START_DELAY_MS = 700L
+        private const val HOME_PROVIDER_SEARCH_RETRY_DELAY_MS = 500L
+        private const val HOME_PROVIDER_SEARCH_MAX_ATTEMPTS = 30
     }
 
     override fun onServiceConnected() {
@@ -74,6 +78,15 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 GOOGLE_SEARCH_PACKAGE,
                 AMAZON_LAUNCHER_PACKAGE
             )) return
+        val homeProviderPlot = GoogleTvSearchTitleExtractor.homeProviderPlot(
+            packageName,
+            event.text.map { it.toString() }
+        )
+        if (eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && homeProviderPlot != null) {
+            Log.d(TAG, "Google TV home provider plot detected: $homeProviderPlot")
+            routeHomeProviderPlot(homeProviderPlot)
+            return
+        }
         val isSearchRouteAction = GoogleTvSearchTitleExtractor.isDetailsAction(
                 packageName,
                 event.text.map { it.toString() }
@@ -160,6 +173,40 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             )
         } else {
             Log.w(TAG, "Unable to read title from Google TV search details")
+        }
+    }
+
+    private fun routeHomeProviderPlot(plot: String) {
+        Handler(Looper.getMainLooper()).postDelayed({
+            val searchIntent = Intent("android.search.action.GLOBAL_SEARCH").apply {
+                setPackage(GOOGLE_TV_ASSISTANT_PACKAGE)
+                putExtra("query", plot)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                startActivity(searchIntent)
+                Log.d(TAG, "Google TV semantic search started: $plot")
+                readSemanticSearchResult(plot)
+            } catch (error: Exception) {
+                Log.e(TAG, "Unable to start Google TV semantic search", error)
+            }
+        }, HOME_PROVIDER_SEARCH_START_DELAY_MS)
+    }
+
+    private fun readSemanticSearchResult(plot: String, attempt: Int = 0) {
+        val visibleTexts = mutableListOf<String>()
+        rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+        val title = GoogleTvSearchTitleExtractor.semanticResultTitle(plot, visibleTexts)
+        if (title != null) {
+            Log.d(TAG, "Google TV semantic search resolved: $plot -> $title")
+            handleMovieClick(title)
+        } else if (attempt + 1 < HOME_PROVIDER_SEARCH_MAX_ATTEMPTS) {
+            Handler(Looper.getMainLooper()).postDelayed(
+                { readSemanticSearchResult(plot, attempt + 1) },
+                HOME_PROVIDER_SEARCH_RETRY_DELAY_MS
+            )
+        } else {
+            Log.w(TAG, "Unable to resolve Google TV home provider plot: $plot")
         }
     }
 
