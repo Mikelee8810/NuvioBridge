@@ -34,7 +34,7 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
 
         serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_VIEW_SELECTED
+            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 100
             packageNames = arrayOf(
@@ -49,9 +49,7 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
-            event?.eventType != AccessibilityEvent.TYPE_VIEW_SELECTED
-        ) return
+        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return
         val packageName = event.packageName?.toString() ?: return
         if (packageName !in setOf(
                 GOOGLE_TV_LAUNCHER_PACKAGE,
@@ -61,10 +59,6 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 GOOGLE_SEARCH_PACKAGE,
                 AMAZON_LAUNCHER_PACKAGE
             )) return
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SELECTED &&
-            packageName !in setOf(GOOGLE_TV_ASSISTANT_PACKAGE, GOOGLE_SEARCH_PACKAGE)
-        ) return
-
         if (event.packageName == AMAZON_LAUNCHER_PACKAGE) {
             val title = extractFireTvTitle(event)
             if (!title.isNullOrBlank()) {
