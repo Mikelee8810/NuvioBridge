@@ -17,6 +17,7 @@ import java.util.concurrent.Executors
 class TvRecommendationAccessibilityService : AccessibilityService() {
 
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
+    private var pendingGoogleTvSearchTitle: String? = null
 
     companion object {
         private const val TAG = "TvRecService"
@@ -37,7 +38,8 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
 
         serviceInfo = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or
-                AccessibilityEvent.TYPE_VIEW_SELECTED
+                AccessibilityEvent.TYPE_VIEW_SELECTED or
+                AccessibilityEvent.TYPE_VIEW_FOCUSED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 100
             packageNames = arrayOf(
@@ -54,7 +56,8 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val eventType = event?.eventType ?: return
         if (eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
-            eventType != AccessibilityEvent.TYPE_VIEW_SELECTED
+            eventType != AccessibilityEvent.TYPE_VIEW_SELECTED &&
+            eventType != AccessibilityEvent.TYPE_VIEW_FOCUSED
         ) return
         val packageName = event.packageName?.toString() ?: return
         Log.d(
@@ -78,8 +81,17 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 packageName,
                 event.contentDescription?.toString()
             )
-        if (isSearchRouteAction) {
-            handleGoogleTvSearchRoute()
+        if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+            if (isSearchRouteAction) {
+                pendingGoogleTvSearchTitle = readActiveGoogleTvSearchTitle()
+                Log.d(TAG, "Google TV search title cached: $pendingGoogleTvSearchTitle")
+            }
+            return
+        }
+        if (eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && isSearchRouteAction) {
+            val cachedTitle = pendingGoogleTvSearchTitle
+            pendingGoogleTvSearchTitle = null
+            handleGoogleTvSearchRoute(cachedTitle)
             return
         }
         val isSearchSelection = eventType == AccessibilityEvent.TYPE_VIEW_SELECTED &&
@@ -127,21 +139,25 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         }, 600)
     }
 
-    private fun handleGoogleTvSearchRoute(attempt: Int = 0) {
-        val visibleTexts = mutableListOf<String>()
-        rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
-        val title = GoogleTvSearchTitleExtractor.extract(visibleTexts)
+    private fun handleGoogleTvSearchRoute(cachedTitle: String? = null, attempt: Int = 0) {
+        val title = cachedTitle ?: readActiveGoogleTvSearchTitle()
         if (title != null) {
             Log.d(TAG, "Movie/show detected (Google TV search): $title")
             handleMovieClick(title)
         } else if (attempt + 1 < SEARCH_DETAILS_MAX_ATTEMPTS) {
             Handler(Looper.getMainLooper()).postDelayed(
-                { handleGoogleTvSearchRoute(attempt + 1) },
+                { handleGoogleTvSearchRoute(attempt = attempt + 1) },
                 SEARCH_DETAILS_RETRY_DELAY_MS
             )
         } else {
             Log.w(TAG, "Unable to read title from Google TV search details")
         }
+    }
+
+    private fun readActiveGoogleTvSearchTitle(): String? {
+        val visibleTexts = mutableListOf<String>()
+        rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+        return GoogleTvSearchTitleExtractor.extract(visibleTexts)
     }
 
     private fun collectVisibleTexts(node: AccessibilityNodeInfo, output: MutableList<String>) {
