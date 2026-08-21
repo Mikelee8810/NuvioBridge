@@ -1,36 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TvRecommendationBridge</string>
-    <string name="accessibility_service_description">
-        Detects clicks on movie/show recommendation cards in the Android TV
-        launcher and opens the matching page directly in Nuvio or Stremio.
-    </string>
-    <string name="main_subtitle">Click a recommendation in the launcher and open it straight in your favorite app</string>
-
-    <string name="main_subscription_title">Subscription</string>
-    <string name="main_subscription_unknown">Enter the email you paid with and tap Verify</string>
-    <string name="main_subscription_checking">Verifying…</string>
-    <string name="main_subscription_active">Subscription active (%1$s)</string>
-    <string name="main_subscription_not_subscribed">That email doesn\'t have an active subscription</string>
-    <string name="main_subscription_device_mismatch">That email is already in use on another device. You can move it here in %1$d days</string>
-    <string name="main_subscription_trial_already_used">This device already used its free trial with a different email. You\'ll need an active subscription to use it here</string>
-    <string name="main_subscription_error">Couldn\'t verify (check your connection) and try again</string>
-    <string name="main_email_hint">you@email.com</string>
-    <string name="main_verify_button">Verify subscription</string>
-    <string name="main_payment_hint">Scan with your phone and pay using this same email:</string>
-    <string name="main_monthly_label">€2.50/month</string>
-    <string name="main_monthly_trial_note">2-day free trial if not used before — no card needed</string>
-    <string name="main_semiannual_label">€7.99/6 months</string>
-    <string name="main_annual_label">€12.99/year</string>
-    <string name="main_lifetime_label">€19.99 one-time</string>
-    <string name="main_not_configured">(not configured)</string>
-
-    <string name="main_choose_app">Always open in:</string>
-    <string name="main_nuvio_label">Nuvio</string>
-    <string name="main_stremio_label">Stremio</string>
-    <string name="main_open_accessibility_settings">Enable the service in Accessibility</string>
-    <string name="main_accessibility_settings_unavailable">Couldn\'t open Accessibility settings automatically on this device — open Settings manually and look for TvRecommendationBridge under Accessibility.</string>
-
-    <string name="main_credits_title">Credits</string>
+    <string name="app_name">NuvioBridge</string>
+    <string name="accessibility_service_description">Detects movie and show recommendation clicks in the TV launcher and opens the matching title directly in Nuvio.</string>
+    <string name="main_subtitle">Open Google TV recommendations directly in Nuvio.</string>
+    <string name="main_ready_message">No account, subscription, or payment is required.</string>
+    <string name="main_open_accessibility_settings">Enable NuvioBridge in Accessibility</string>
+    <string name="main_setup_hint">After enabling the service, return to Google TV and select a movie or show recommendation.</string>
+    <string name="main_accessibility_settings_unavailable">Couldn\'t open Accessibility settings automatically on this device; open Settings manually and look for NuvioBridge under Accessibility.</string>
+    <string name="main_credits_title">TMDB</string>
     <string name="main_tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
 </resources>
