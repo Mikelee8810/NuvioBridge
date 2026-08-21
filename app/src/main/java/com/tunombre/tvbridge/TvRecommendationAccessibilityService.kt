@@ -84,13 +84,22 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
             if (isSearchRouteAction) {
                 pendingGoogleTvSearchTitle = readActiveGoogleTvSearchTitle()
-                Log.d(TAG, "Google TV search title cached: $pendingGoogleTvSearchTitle")
+                Log.d(
+                    TAG,
+                    "Google TV search title cached: $pendingGoogleTvSearchTitle " +
+                        "instance=${System.identityHashCode(this)} thread=${Thread.currentThread().name}"
+                )
             }
             return
         }
         if (eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && isSearchRouteAction) {
             val cachedTitle = pendingGoogleTvSearchTitle
             pendingGoogleTvSearchTitle = null
+            Log.d(
+                TAG,
+                "Google TV search title consumed: $cachedTitle " +
+                    "instance=${System.identityHashCode(this)} thread=${Thread.currentThread().name}"
+            )
             handleGoogleTvSearchRoute(cachedTitle)
             return
         }
