@@ -99,4 +99,45 @@ class GoogleTvSearchTitleExtractorTest {
             )
         )
     }
+
+    @Test
+    fun rejectsStaleSemanticResponseFromPriorSearch() {
+        val spongeBobQuery = "SpongeBob must recover the secret Krabby Patty formula"
+
+        assertEquals(
+            false,
+            GoogleTvSearchTitleExtractor.isSemanticResponseForQuery(
+                spongeBobQuery,
+                listOf(
+                    spongeBobQuery,
+                    "Iron Man is a 2008 superhero film starring Robert Downey Jr.",
+                    "Watch now Hulu",
+                    "View details"
+                )
+            )
+        )
+        assertEquals(
+            true,
+            GoogleTvSearchTitleExtractor.isSemanticResponseForQuery(
+                spongeBobQuery,
+                listOf(
+                    spongeBobQuery,
+                    "The mystery of the Krabby Patty formula is a major theme in SpongeBob SquarePants.",
+                    "Watch now Prime Video",
+                    "View details"
+                )
+            )
+        )
+        assertEquals(
+            true,
+            GoogleTvSearchTitleExtractor.isSemanticResponseForQuery(
+                "Two lighthouse keepers lose their sanity on an island",
+                listOf(
+                    "Two lighthouse keepers lose their sanity on an island",
+                    "The Lighthouse (2019) is a psychological horror film.",
+                    "View details"
+                )
+            )
+        )
+    }
 }

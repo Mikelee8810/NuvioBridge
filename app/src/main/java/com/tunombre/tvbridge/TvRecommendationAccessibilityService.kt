@@ -211,7 +211,15 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         val visibleTexts = mutableListOf<String>()
         val root = rootInActiveWindow
         root?.let { collectVisibleTexts(it, visibleTexts) }
-        val title = GoogleTvSearchTitleExtractor.semanticResultTitle(plot, visibleTexts)
+        val responseMatchesQuery = GoogleTvSearchTitleExtractor.isSemanticResponseForQuery(
+            plot,
+            visibleTexts
+        )
+        val title = if (responseMatchesQuery) {
+            GoogleTvSearchTitleExtractor.semanticResultTitle(plot, visibleTexts)
+        } else {
+            null
+        }
             ?: if (detailsRequested) {
                 GoogleTvSearchTitleExtractor.entityDetailsTitle(plot, visibleTexts)
             } else {
@@ -222,7 +230,7 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             handleMovieClick(title)
         } else if (attempt + 1 < HOME_PROVIDER_SEARCH_MAX_ATTEMPTS) {
             var nextDetailsRequested = detailsRequested
-            if (!detailsRequested && root != null && clickViewDetails(root)) {
+            if (!detailsRequested && responseMatchesQuery && root != null && clickViewDetails(root)) {
                 nextDetailsRequested = true
                 Log.d(TAG, "Google TV semantic View details opened")
             }

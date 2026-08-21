@@ -2,6 +2,9 @@ package com.tunombre.tvbridge
 
 object GoogleTvSearchTitleExtractor {
     private const val GOOGLE_TV_LAUNCHER_PACKAGE = "com.google.android.apps.tv.launcherx"
+    private val SEMANTIC_STOP_WORDS = setOf(
+        "about", "after", "their", "there", "these", "those", "watch", "where", "which"
+    )
 
     fun extract(visibleTexts: List<String>): String? =
         visibleTexts.firstOrNull { it.isNotBlank() }?.trim()
@@ -37,4 +40,21 @@ object GoogleTvSearchTitleExtractor {
             ?.trim()
             ?.takeUnless { it.equals(query, ignoreCase = true) }
     }
+
+    fun isSemanticResponseForQuery(query: String, visibleTexts: List<String>): Boolean {
+        val queryTokens = semanticTokens(query)
+        if (queryTokens.isEmpty()) return false
+        val responseTokens = visibleTexts
+            .asSequence()
+            .filterNot { it.equals(query, ignoreCase = true) }
+            .flatMap { semanticTokens(it).asSequence() }
+            .toSet()
+        return queryTokens.any(responseTokens::contains)
+    }
+
+    private fun semanticTokens(value: String): Set<String> =
+        value.lowercase()
+            .split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.length >= 5 && it !in SEMANTIC_STOP_WORDS }
+            .toSet()
 }
