@@ -70,4 +70,33 @@ class GoogleTvSearchTitleExtractorTest {
             )
         )
     }
+
+    @Test
+    fun extractsTitleFromGoogleTvEntityDetailsScreen() {
+        assertEquals(
+            "SpongeBob SquarePants",
+            GoogleTvSearchTitleExtractor.entityDetailsTitle(
+                query = "SpongeBob must recover the secret Krabby Patty formula",
+                visibleTexts = listOf(
+                    "SpongeBob SquarePants",
+                    "TRENDING",
+                    "TV Y7",
+                    "Cartoon",
+                    "1999 - Present",
+                    "What it's about"
+                )
+            )
+        )
+        assertEquals(
+            null,
+            GoogleTvSearchTitleExtractor.entityDetailsTitle(
+                query = "SpongeBob must recover the secret Krabby Patty formula",
+                visibleTexts = listOf(
+                    "SpongeBob must recover the secret Krabby Patty formula",
+                    "The mystery of the Krabby Patty formula is a major theme in SpongeBob SquarePants.",
+                    "View details"
+                )
+            )
+        )
+    }
 }

@@ -29,4 +29,12 @@ object GoogleTvSearchTitleExtractor {
             .mapNotNull { titlePattern.find(it.trim())?.groupValues?.getOrNull(1) }
             .firstOrNull()
     }
+
+    fun entityDetailsTitle(query: String, visibleTexts: List<String>): String? {
+        if (visibleTexts.any { it.equals("View details", ignoreCase = true) }) return null
+        return visibleTexts
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            ?.takeUnless { it.equals(query, ignoreCase = true) }
+    }
 }

@@ -19,6 +19,7 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
 
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
     private var pendingGoogleTvSearchTitle: String? = null
+    private var pendingSemanticDetailsClick = false
 
     companion object {
         private const val TAG = "TvRecService"
@@ -106,6 +107,15 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             return
         }
         if (eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && isSearchRouteAction) {
+            if (pendingSemanticDetailsClick && GoogleTvSearchTitleExtractor.isDetailsAction(
+                    packageName,
+                    event.text.map { it.toString() }
+                )
+            ) {
+                pendingSemanticDetailsClick = false
+                Log.d(TAG, "Google TV semantic View details click consumed")
+                return
+            }
             val cachedTitle = pendingGoogleTvSearchTitle
             pendingGoogleTvSearchTitle = null
             Log.d(
@@ -193,21 +203,48 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         }, HOME_PROVIDER_SEARCH_START_DELAY_MS)
     }
 
-    private fun readSemanticSearchResult(plot: String, attempt: Int = 0) {
+    private fun readSemanticSearchResult(
+        plot: String,
+        attempt: Int = 0,
+        detailsRequested: Boolean = false
+    ) {
         val visibleTexts = mutableListOf<String>()
-        rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+        val root = rootInActiveWindow
+        root?.let { collectVisibleTexts(it, visibleTexts) }
         val title = GoogleTvSearchTitleExtractor.semanticResultTitle(plot, visibleTexts)
+            ?: if (detailsRequested) {
+                GoogleTvSearchTitleExtractor.entityDetailsTitle(plot, visibleTexts)
+            } else {
+                null
+            }
         if (title != null) {
             Log.d(TAG, "Google TV semantic search resolved: $plot -> $title")
             handleMovieClick(title)
         } else if (attempt + 1 < HOME_PROVIDER_SEARCH_MAX_ATTEMPTS) {
+            var nextDetailsRequested = detailsRequested
+            if (!detailsRequested && root != null && clickViewDetails(root)) {
+                nextDetailsRequested = true
+                Log.d(TAG, "Google TV semantic View details opened")
+            }
             Handler(Looper.getMainLooper()).postDelayed(
-                { readSemanticSearchResult(plot, attempt + 1) },
+                { readSemanticSearchResult(plot, attempt + 1, nextDetailsRequested) },
                 HOME_PROVIDER_SEARCH_RETRY_DELAY_MS
             )
         } else {
             Log.w(TAG, "Unable to resolve Google TV home provider plot: $plot")
         }
+    }
+
+    private fun clickViewDetails(root: AccessibilityNodeInfo): Boolean {
+        val detailsButton = root.findAccessibilityNodeInfosByText("View details")
+            .firstOrNull {
+                it.text?.toString()?.equals("View details", ignoreCase = true) == true &&
+                    it.isClickable
+            } ?: return false
+        pendingSemanticDetailsClick = true
+        val clicked = detailsButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        if (!clicked) pendingSemanticDetailsClick = false
+        return clicked
     }
 
     private fun readActiveGoogleTvSearchTitle(): String? {
