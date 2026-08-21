@@ -23,6 +23,10 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         private val TITLE_MARKERS = listOf("cuesta:", "se necesita una suscripción a", "puntuación:")
         private const val AMAZON_LAUNCHER_PACKAGE = "com.amazon.tv.launcher"
         private const val GOOGLE_TV_LAUNCHER_PACKAGE = "com.google.android.apps.tv.launcherx"
+        private const val LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE = "com.google.android.tvlauncher"
+        private const val GOOGLE_TV_RECOMMENDATIONS_PACKAGE = "com.google.android.tvrecommendations"
+        private const val GOOGLE_TV_ASSISTANT_PACKAGE = "com.google.android.katniss"
+        private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
         private const val FIRE_TV_MAIN_IMAGE_ID = "com.amazon.tv.launcher:id/main_image"
     }
 
@@ -30,15 +34,36 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
 
         serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED
+            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_VIEW_SELECTED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 100
-            packageNames = arrayOf(GOOGLE_TV_LAUNCHER_PACKAGE, AMAZON_LAUNCHER_PACKAGE)
+            packageNames = arrayOf(
+                GOOGLE_TV_LAUNCHER_PACKAGE,
+                LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
+                GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
+                GOOGLE_TV_ASSISTANT_PACKAGE,
+                GOOGLE_SEARCH_PACKAGE,
+                AMAZON_LAUNCHER_PACKAGE
+            )
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return
+        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
+            event?.eventType != AccessibilityEvent.TYPE_VIEW_SELECTED
+        ) return
+        val packageName = event.packageName?.toString() ?: return
+        if (packageName !in setOf(
+                GOOGLE_TV_LAUNCHER_PACKAGE,
+                LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
+                GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
+                GOOGLE_TV_ASSISTANT_PACKAGE,
+                GOOGLE_SEARCH_PACKAGE,
+                AMAZON_LAUNCHER_PACKAGE
+            )) return
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SELECTED &&
+            packageName !in setOf(GOOGLE_TV_ASSISTANT_PACKAGE, GOOGLE_SEARCH_PACKAGE)
+        ) return
 
         if (event.packageName == AMAZON_LAUNCHER_PACKAGE) {
             val title = extractFireTvTitle(event)

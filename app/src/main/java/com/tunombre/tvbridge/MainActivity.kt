@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.net.Uri
 import android.widget.Button
 import android.widget.Toast
 
@@ -21,13 +22,17 @@ class MainActivity : Activity() {
 
         findViewById<Button>(R.id.button_accessibility_settings).setOnClickListener {
             try {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                startActivity(
+                    Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS").apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                )
             } catch (e: Exception) {
-                Toast.makeText(
-                    this,
-                    R.string.main_accessibility_settings_unavailable,
-                    Toast.LENGTH_LONG
-                ).show()
+                try {
+                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                } catch (fallback: Exception) {
+                    Toast.makeText(this, R.string.main_accessibility_settings_unavailable, Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
