@@ -34,7 +34,8 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
 
         serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED
+            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or
+                AccessibilityEvent.TYPE_VIEW_SELECTED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 100
             packageNames = arrayOf(
@@ -49,7 +50,10 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return
+        val eventType = event?.eventType ?: return
+        if (eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
+            eventType != AccessibilityEvent.TYPE_VIEW_SELECTED
+        ) return
         val packageName = event.packageName?.toString() ?: return
         if (packageName !in setOf(
                 GOOGLE_TV_LAUNCHER_PACKAGE,
@@ -59,6 +63,9 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 GOOGLE_SEARCH_PACKAGE,
                 AMAZON_LAUNCHER_PACKAGE
             )) return
+        val isSearchSelection = eventType == AccessibilityEvent.TYPE_VIEW_SELECTED &&
+            packageName in setOf(GOOGLE_TV_ASSISTANT_PACKAGE, GOOGLE_SEARCH_PACKAGE)
+        if (eventType == AccessibilityEvent.TYPE_VIEW_SELECTED && !isSearchSelection) return
         if (event.packageName == AMAZON_LAUNCHER_PACKAGE) {
             val title = extractFireTvTitle(event)
             if (!title.isNullOrBlank()) {
@@ -70,8 +77,8 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
 
         val desc = event.contentDescription?.toString()
         if (!desc.isNullOrBlank()) {
-            if (isMovieOrShowCard(event, desc)) {
-                val title = extractTitle(desc)
+            if (isMovieOrShowCard(event, desc) || (isSearchSelection && desc.length > 1)) {
+                val title = if (isSearchSelection) extractSearchTitle(desc) else extractTitle(desc)
                 if (title.isNotBlank()) {
                     Log.d(TAG, "Movie/show detected: $title")
                     handleMovieClick(title)
@@ -99,6 +106,13 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 }
             }
         }, 600)
+    }
+
+    private fun extractSearchTitle(contentDesc: String): String {
+        return contentDesc
+            .substringBefore("\n")
+            .substringBefore(",")
+            .trim()
     }
 
     private fun extractFireTvTitle(event: AccessibilityEvent): String? {
