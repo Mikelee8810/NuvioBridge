@@ -2,10 +2,14 @@ package com.tunombre.tvbridge
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.Executors
@@ -78,25 +82,57 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         // para distinguir tarjetas de contenido real de iconos de apps sin
         // necesitar una lista de apps conocidas.
         private const val FIRE_TV_MAIN_IMAGE_ID = "com.amazon.tv.launcher:id/main_image"
+
+        // Acción de broadcast que MainActivity dispara cuando el usuario
+        // pulsa "Mostrar menú de apagado" en la app: el botón físico de
+        // Power del mando no se puede interceptar (el sistema lo consume
+        // antes de que llegue a cualquier app, accesibilidad incluida), así
+        // que este botón dentro de la app es el atajo real para no tener que
+        // navegar por los ajustes del sistema.
+        const val ACTION_SHOW_POWER_MENU = "com.tunombre.tvbridge.ACTION_SHOW_POWER_MENU"
     }
+
+    private var powerMenuReceiver: BroadcastReceiver? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
 
-        // Configuración programática del servicio: en este dispositivo (TCL,
-        // Android 12) el meta-data de accessibility_service_config.xml no se
-        // estaba aplicando en tiempo de ejecución (dumpsys accessibility
-        // mostraba capabilities=0, eventTypes= vacío pese a que el XML
-        // compilado en el APK era correcto). Configurarlo aquí evita
-        // depender de ese parseo.
-        // val info = serviceInfo ?: AccessibilityServiceInfo()
-        // info.apply {
-        //     eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        //     feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-        //     notificationTimeout = 100
-        //     flags = flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
-        // }
-        // serviceInfo = info
+        // IMPORTANTE: partimos del serviceInfo YA existente (el que el
+        // sistema construyó a partir de accessibility_service_config.xml,
+        // incluyendo canRetrieveWindowContent y demás "capabilities") y solo
+        // le tocamos los campos que necesitamos ajustar en tiempo de
+        // ejecución. Asignar un `AccessibilityServiceInfo()` nuevo aquí
+        // borraría esas capacidades por completo (es justo el bug que
+        // dejaba "dumpsys accessibility" con capabilities=0 en Android 14).
+        val info = serviceInfo ?: AccessibilityServiceInfo()
+        info.eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        info.notificationTimeout = 100
+        // Sin packageNames (null = todas las apps): antes solo
+        // escuchábamos al launcher, pero para poder detectar que
+        // YouTube/Netflix/etc. pasaron a primer plano (y mandarlas de vuelta
+        // a Home) necesitamos ver los cambios de ventana de cualquier app,
+        // no solo del launcher.
+        serviceInfo = info
+
+        // Botón "Mostrar menú de apagado" de MainActivity: no hay forma de
+        // interceptar el botón físico de Power (ver ACTION_SHOW_POWER_MENU
+        // arriba), así que la app dispara este broadcast y nosotros, como
+        // servicio de accesibilidad, sí podemos invocar el diálogo de
+        // apagado del sistema.
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                Log.d(TAG, "Mostrando menú de apagado a petición de la app")
+                performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
+            }
+        }
+        powerMenuReceiver = receiver
+        val filter = IntentFilter(ACTION_SHOW_POWER_MENU)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter)
+        }
 
         // Refresca la verificación de suscripción en segundo plano al
         // arrancar el servicio, para que la caché (usada por isLikelyValid)
@@ -285,32 +321,13 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         }
     }
 
-    // Intercepta el botón físico de Power del mando. Por defecto, mantenerlo
-    // pulsado (o incluso una pulsación corta en algunos mandos de Chromecast
-    // con Google TV) apaga la pantalla, lo que hace imposible capturarlo en
-    // apps como Button Mapper (al pulsarlo para "grabarlo", la pantalla se
-    // apaga antes de que puedan detectar la pulsación). Como servicio de
-    // accesibilidad sí podemos leer el evento de tecla antes que el sistema,
-    // así que lo consumimos y mostramos directamente el menú de
-    // apagado/reinicio en su lugar.
-    override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode != KeyEvent.KEYCODE_POWER) return super.onKeyEvent(event)
-        if (!Preferences.isPowerButtonRemapEnabled(this)) return super.onKeyEvent(event)
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
-        }
-        // Devolver true en todas las acciones (down/up) de esta tecla evita
-        // que el sistema procese también su comportamiento normal (apagar
-        // pantalla).
-        return true
-    }
-
     override fun onInterrupt() {
         Log.d(TAG, "Servicio interrumpido")
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        powerMenuReceiver?.let { unregisterReceiver(it) }
         backgroundExecutor.shutdown()
     }
 }

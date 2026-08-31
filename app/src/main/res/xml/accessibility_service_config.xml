@@ -3,6 +3,5 @@
     android:accessibilityEventTypes="typeViewClicked|typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="true"
-    android:canRequestFilterKeyEvents="true"
     android:notificationTimeout="100"
     android:description="@string/accessibility_service_description" />

@@ -46,8 +46,14 @@
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
+            <!-- El nombre correcto de este meta-data es "android.accessibilityservice"
+                 (sin ".config"). Con el nombre equivocado, Android ignora
+                 accessibility_service_config.xml por completo: la app queda
+                 sin las capacidades declaradas ahí (canRetrieveWindowContent,
+                 etc.), lo que en Android 14 se traduce en
+                 "dumpsys accessibility" mostrando capabilities=0. -->
             <meta-data
-                android:name="android.accessibilityservice.config"
+                android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
 

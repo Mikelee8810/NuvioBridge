@@ -32,8 +32,9 @@
     <string name="main_stremio_label">Stremio</string>
     <string name="main_youtube_redirect_title">YouTube</string>
     <string name="main_youtube_redirect_toggle">Redirect YouTube videos to SmartTube</string>
-    <string name="main_power_button_title">Remote power button</string>
-    <string name="main_power_button_toggle">Show the power menu (restart/shutdown) instead of sleeping the screen</string>
+    <string name="main_power_button_title">Power menu</string>
+    <string name="main_power_button_explanation">Android doesn\'t let apps intercept the remote\'s physical power button, but this button gets you the restart/shutdown menu in one tap instead of digging through Settings</string>
+    <string name="main_power_button_action">Show power menu now</string>
     <string name="main_open_accessibility_settings">Enable the service in Accessibility</string>
     <string name="main_accessibility_settings_unavailable">Couldn\'t open Accessibility settings automatically on this device — open Settings manually and look for StreamBridge under Accessibility.</string>
 
