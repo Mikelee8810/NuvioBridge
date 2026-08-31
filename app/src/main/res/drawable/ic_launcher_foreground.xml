@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Icono simple: un triángulo de "play" blanco centrado, sobre el fondo
-     de color sólido de ic_launcher_background.xml. -->
+<!-- Nuevo icono de StreamBridge: dos flechas/triángulos de "play"
+     superpuestas y desplazadas, representando la redirección de una app a
+     otra (el propósito de la app: interceptar y reenviar la reproducción).
+     La flecha trasera (blanca, semitransparente) es la app original; la
+     delantera (acento cian) es a la que redirigimos. Sobre el fondo sólido
+     oscuro de ic_launcher_background.xml. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -8,5 +12,9 @@
     android:viewportHeight="108">
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M40,34 L74,54 L40,74 Z" />
+        android:fillAlpha="0.35"
+        android:pathData="M26,30 L54,54 L26,78 Z" />
+    <path
+        android:fillColor="#2DD4C8"
+        android:pathData="M50,30 L82,54 L50,78 Z" />
 </vector>

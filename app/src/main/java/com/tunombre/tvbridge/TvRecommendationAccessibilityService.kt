@@ -31,6 +31,14 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     // Un solo hilo de fondo para las llamadas de red (TMDb), para no
     // bloquear nunca el hilo principal del servicio de accesibilidad.
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    // Hasta cuándo seguimos vigilando qué app aparece en primer plano tras
+    // detectar un clic en una recomendación (ver PENDING_REDIRECT_WINDOW_MS).
+    @Volatile private var pendingRedirectDeadline: Long = 0L
+
+    // Para el debounce del redirect de YouTube.
+    @Volatile private var lastYoutubeRedirectAt: Long = 0L
 
     companion object {
         private const val TAG = "TvRecService"
@@ -43,6 +51,24 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
 
         private const val AMAZON_LAUNCHER_PACKAGE = "com.amazon.tv.launcher"
         private const val GOOGLE_TV_LAUNCHER_PACKAGE = "com.google.android.apps.tv.launcherx"
+
+        // Cuánto tiempo, tras detectar el clic en una tarjeta de
+        // película/serie, seguimos vigilando qué app aparece en primer
+        // plano. Si en ese margen aparece algo que no es ni el launcher ni
+        // la app de destino elegida, la mandamos de vuelta a Home: significa
+        // que la app original (Netflix, Prime Video, etc.) ganó la carrera
+        // contra nuestra resolución de TMDb y estaba a punto de reproducir
+        // en segundo plano.
+        private const val PENDING_REDIRECT_WINDOW_MS = 6000L
+
+        // Tiempo que le damos a la pulsación de Home para completarse antes
+        // de lanzar SmartTube encima; si lanzamos demasiado rápido, a veces
+        // la animación de Home se come el startActivity.
+        private const val HOME_TO_LAUNCH_DELAY_MS = 350L
+
+        // Evita relanzar SmartTube en bucle si YouTube tarda en cerrarse del
+        // todo y dispara varios TYPE_WINDOW_STATE_CHANGED seguidos.
+        private const val YOUTUBE_REDIRECT_DEBOUNCE_MS = 3000L
 
         // En las tarjetas de contenido del launcher de Fire TV, el título vive
         // en el content-desc de este ImageView hijo, no en el nodo pulsado
@@ -63,10 +89,14 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         // compilado en el APK era correcto). Configurarlo aquí evita
         // depender de ese parseo.
         serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED
+            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 100
-            packageNames = arrayOf(GOOGLE_TV_LAUNCHER_PACKAGE, AMAZON_LAUNCHER_PACKAGE)
+            // Sin packageNames (null = todas las apps): antes solo
+            // escuchábamos al launcher, pero para poder detectar que
+            // YouTube/Netflix/etc. pasaron a primer plano (y mandarlas de
+            // vuelta a Home) necesitamos ver los cambios de ventana de
+            // cualquier app, no solo del launcher.
         }
 
         // Refresca la verificación de suscripción en segundo plano al
@@ -78,8 +108,46 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return
+        event ?: return
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> handleWindowStateChanged(event)
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> handleViewClicked(event)
+        }
+    }
+
+    private fun handleWindowStateChanged(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg == packageName) return
+        if (pkg == GOOGLE_TV_LAUNCHER_PACKAGE || pkg == AMAZON_LAUNCHER_PACKAGE) return
         if (!LicenseManager.isLikelyValid(this)) return
+
+        if (YoutubeRedirect.isYoutubePackage(pkg)) {
+            if (!Preferences.isYoutubeRedirectEnabled(this)) return
+            val now = System.currentTimeMillis()
+            if (now - lastYoutubeRedirectAt < YOUTUBE_REDIRECT_DEBOUNCE_MS) return
+            lastYoutubeRedirectAt = now
+            Log.d(TAG, "YouTube en primer plano ($pkg), redirigiendo a SmartTube")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            mainHandler.postDelayed({ YoutubeRedirect.redirectToSmartTube(this) }, HOME_TO_LAUNCH_DELAY_MS)
+            return
+        }
+
+        // Red de seguridad para películas/series: si hace poco detectamos un
+        // clic en una recomendación y de repente aparece en primer plano una
+        // app que no es la elegida por el usuario (Nuvio/Stremio), es que la
+        // app original iba a reproducir en segundo plano. La mandamos a Home
+        // para que nunca llegue a verse ni a sonar.
+        if (System.currentTimeMillis() > pendingRedirectDeadline) return
+        if (YoutubeRedirect.isSmartTubePackage(pkg)) return
+        val selectedPackage = Preferences.getSelectedApp(this).packageName
+        if (pkg == selectedPackage) return
+        Log.d(TAG, "App inesperada en primer plano durante una redirección ($pkg), volviendo a Home")
+        performGlobalAction(GLOBAL_ACTION_HOME)
+    }
+
+    private fun handleViewClicked(event: AccessibilityEvent) {
+        if (!LicenseManager.isLikelyValid(this)) return
+        if (event.packageName != AMAZON_LAUNCHER_PACKAGE && event.packageName != GOOGLE_TV_LAUNCHER_PACKAGE) return
 
         if (event.packageName == AMAZON_LAUNCHER_PACKAGE) {
             val title = extractFireTvTitle(event)
@@ -197,6 +265,16 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     }
 
     private fun handleMovieClick(title: String) {
+        // Nos vamos a Home inmediatamente, antes de esperar a la resolución
+        // de TMDb (que es una llamada de red y puede tardar): así la app
+        // original que el launcher iba a abrir (Netflix, Prime Video, Disney+,
+        // etc.) nunca llega a quedarse reproduciendo en segundo plano
+        // mientras nosotros todavía estamos resolviendo el título. El
+        // vigilante de handleWindowStateChanged cubre el resto de la carrera
+        // durante PENDING_REDIRECT_WINDOW_MS.
+        pendingRedirectDeadline = System.currentTimeMillis() + PENDING_REDIRECT_WINDOW_MS
+        performGlobalAction(GLOBAL_ACTION_HOME)
+
         backgroundExecutor.execute {
             val match = TmdbClient.findImdbId(title)
             if (match == null) {

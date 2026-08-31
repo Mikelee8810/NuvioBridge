@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TvRecommendationBridge</string>
+    <string name="app_name">StreamBridge</string>
     <string name="accessibility_service_description">
         Detects clicks on movie/show recommendation cards in the Android TV
-        launcher and opens the matching page directly in Nuvio or Stremio.
+        launcher and opens the matching page directly in Nuvio or Stremio,
+        and redirects YouTube playback to SmartTube — all without letting
+        the original app open or play in the background.
     </string>
     <string name="main_subtitle">Click a recommendation in the launcher and open it straight in your favorite app</string>
 
@@ -28,8 +30,10 @@
     <string name="main_choose_app">Always open in:</string>
     <string name="main_nuvio_label">Nuvio</string>
     <string name="main_stremio_label">Stremio</string>
+    <string name="main_youtube_redirect_title">YouTube</string>
+    <string name="main_youtube_redirect_toggle">Redirect YouTube videos to SmartTube</string>
     <string name="main_open_accessibility_settings">Enable the service in Accessibility</string>
-    <string name="main_accessibility_settings_unavailable">Couldn\'t open Accessibility settings automatically on this device — open Settings manually and look for TvRecommendationBridge under Accessibility.</string>
+    <string name="main_accessibility_settings_unavailable">Couldn\'t open Accessibility settings automatically on this device — open Settings manually and look for StreamBridge under Accessibility.</string>
 
     <string name="main_credits_title">Credits</string>
     <string name="main_tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>

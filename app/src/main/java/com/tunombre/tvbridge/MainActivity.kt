@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.RadioButton
@@ -46,6 +47,7 @@ class MainActivity : Activity() {
 
         setupPaymentLinks()
         setupPlayerAppSelector()
+        setupYoutubeRedirectToggle()
 
         findViewById<Button>(R.id.button_accessibility_settings).setOnClickListener {
             // En algunos launchers de terceros (p.ej. Fire TV) el sistema
@@ -93,6 +95,14 @@ class MainActivity : Activity() {
         radioGroup.setOnCheckedChangeListener { _, checkedId ->
             val selected = if (checkedId == R.id.radio_stremio) PlayerApp.STREMIO else PlayerApp.NUVIO
             Preferences.setSelectedApp(this, selected)
+        }
+    }
+
+    private fun setupYoutubeRedirectToggle() {
+        val checkbox = findViewById<CheckBox>(R.id.checkbox_youtube_redirect)
+        checkbox.isChecked = Preferences.isYoutubeRedirectEnabled(this)
+        checkbox.setOnCheckedChangeListener { _, isChecked ->
+            Preferences.setYoutubeRedirectEnabled(this, isChecked)
         }
     }
 
