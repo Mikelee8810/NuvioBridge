@@ -1,0 +1,45 @@
+package com.tunombre.tvbridge
+
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ForegroundRedirectPolicyTest {
+
+    @Test
+    fun `blocks an original provider while a Nuvio redirect is pending`() {
+        assertTrue(
+            ForegroundRedirectPolicy.shouldBlockUnexpectedApp(
+                packageName = "com.netflix.ninja",
+                redirectPending = true
+            )
+        )
+    }
+
+    @Test
+    fun `does not block Nuvio while a redirect is pending`() {
+        assertFalse(
+            ForegroundRedirectPolicy.shouldBlockUnexpectedApp(
+                packageName = "com.nuvio.tv",
+                redirectPending = true
+            )
+        )
+    }
+
+    @Test
+    fun `does not block providers after the redirect window ends`() {
+        assertFalse(
+            ForegroundRedirectPolicy.shouldBlockUnexpectedApp(
+                packageName = "com.netflix.ninja",
+                redirectPending = false
+            )
+        )
+    }
+
+    @Test
+    fun `recognizes official YouTube TV packages`() {
+        assertTrue(ForegroundRedirectPolicy.isYoutubePackage("com.google.android.youtube.tv"))
+        assertTrue(ForegroundRedirectPolicy.isYoutubePackage("com.google.android.apps.youtube.leanback"))
+        assertFalse(ForegroundRedirectPolicy.isYoutubePackage("org.smarttube.stable"))
+    }
+}

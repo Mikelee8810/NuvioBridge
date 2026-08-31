@@ -18,8 +18,11 @@ import java.util.concurrent.Executors
 class TvRecommendationAccessibilityService : AccessibilityService() {
 
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingGoogleTvSearchTitle: String? = null
     private var pendingSemanticDetailsClick = false
+    @Volatile private var pendingNuvioRedirectDeadline = 0L
+    @Volatile private var lastYoutubeRedirectAt = 0L
 
     companion object {
         private const val TAG = "TvRecService"
@@ -36,6 +39,9 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         private const val HOME_PROVIDER_SEARCH_START_DELAY_MS = 700L
         private const val HOME_PROVIDER_SEARCH_RETRY_DELAY_MS = 500L
         private const val HOME_PROVIDER_SEARCH_MAX_ATTEMPTS = 30
+        private const val NUVIO_REDIRECT_WINDOW_MS = 8_000L
+        private const val YOUTUBE_REDIRECT_DEBOUNCE_MS = 3_000L
+        private const val HOME_TO_SMARTTUBE_DELAY_MS = 350L
     }
 
     override fun onServiceConnected() {
@@ -48,22 +54,22 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or
             AccessibilityEvent.TYPE_VIEW_SELECTED or
-            AccessibilityEvent.TYPE_VIEW_FOCUSED
+            AccessibilityEvent.TYPE_VIEW_FOCUSED or
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         info.notificationTimeout = 100
-        info.packageNames = arrayOf(
-            GOOGLE_TV_LAUNCHER_PACKAGE,
-            LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
-            GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
-            GOOGLE_TV_ASSISTANT_PACKAGE,
-            GOOGLE_SEARCH_PACKAGE,
-            AMAZON_LAUNCHER_PACKAGE
-        )
+        // All packages are required here so the service can notice and stop
+        // a provider app that Google TV opens after a recommendation click.
+        info.packageNames = null
         serviceInfo = info
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val eventType = event?.eventType ?: return
+        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            handleWindowStateChanged(event)
+            return
+        }
         if (eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
             eventType != AccessibilityEvent.TYPE_VIEW_SELECTED &&
             eventType != AccessibilityEvent.TYPE_VIEW_FOCUSED
@@ -173,6 +179,30 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
                 }
             }
         }, 600)
+    }
+
+    private fun handleWindowStateChanged(event: AccessibilityEvent) {
+        val foregroundPackage = event.packageName?.toString() ?: return
+
+        if (ForegroundRedirectPolicy.isYoutubePackage(foregroundPackage)) {
+            val now = System.currentTimeMillis()
+            if (now - lastYoutubeRedirectAt >= YOUTUBE_REDIRECT_DEBOUNCE_MS) {
+                lastYoutubeRedirectAt = now
+                Log.d(TAG, "Official YouTube opened; redirecting to SmartTube")
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                mainHandler.postDelayed(
+                    { YoutubeRedirect.openSmartTube(this) },
+                    HOME_TO_SMARTTUBE_DELAY_MS
+                )
+            }
+            return
+        }
+
+        val redirectPending = System.currentTimeMillis() <= pendingNuvioRedirectDeadline
+        if (ForegroundRedirectPolicy.shouldBlockUnexpectedApp(foregroundPackage, redirectPending)) {
+            Log.d(TAG, "Blocking original provider during Nuvio redirect: $foregroundPackage")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
     }
 
     private fun handleGoogleTvSearchRoute(cachedTitle: String? = null, attempt: Int = 0) {
@@ -332,6 +362,12 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     }
 
     private fun handleMovieClick(title: String) {
+        // Stop the launcher's original provider immediately, before the TMDB
+        // lookup completes. Window-state monitoring covers providers that win
+        // the race and open a moment after this Home action.
+        pendingNuvioRedirectDeadline = System.currentTimeMillis() + NUVIO_REDIRECT_WINDOW_MS
+        performGlobalAction(GLOBAL_ACTION_HOME)
+
         backgroundExecutor.execute {
             val match = TmdbClient.findImdbId(title)
             if (match == null) {
