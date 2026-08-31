@@ -89,21 +89,14 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         // mostraba capabilities=0, eventTypes= vacío pese a que el XML
         // compilado en el APK era correcto). Configurarlo aquí evita
         // depender de ese parseo.
-        serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            notificationTimeout = 100
-            // Sin packageNames (null = todas las apps): antes solo
-            // escuchábamos al launcher, pero para poder detectar que
-            // YouTube/Netflix/etc. pasaron a primer plano (y mandarlas de
-            // vuelta a Home) necesitamos ver los cambios de ventana de
-            // cualquier app, no solo del launcher.
-
-            // Necesario para poder interceptar el botón físico de Power del
-            // mando (ver onKeyEvent) y mostrar el menú de apagado/reinicio en
-            // vez de dejar que apague la pantalla.
-            flags = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
-        }
+        // val info = serviceInfo ?: AccessibilityServiceInfo()
+        // info.apply {
+        //     eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        //     feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        //     notificationTimeout = 100
+        //     flags = flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        // }
+        // serviceInfo = info
 
         // Refresca la verificación de suscripción en segundo plano al
         // arrancar el servicio, para que la caché (usada por isLikelyValid)
