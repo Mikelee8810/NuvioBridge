@@ -32,7 +32,8 @@ object YoutubeRedirect {
     // instalada.
     private val SMARTTUBE_PACKAGES = listOf(
         "com.teamsmart.videomanager.tv",
-        "com.liskovsoft.smarttubetv"
+        "com.liskovsoft.smarttubetv",
+        "org.smarttube.stable"
     )
 
     fun isYoutubePackage(packageName: String?): Boolean =
