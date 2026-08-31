@@ -41,21 +41,25 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
 
-        serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or
-                AccessibilityEvent.TYPE_VIEW_SELECTED or
-                AccessibilityEvent.TYPE_VIEW_FOCUSED
-            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            notificationTimeout = 100
-            packageNames = arrayOf(
-                GOOGLE_TV_LAUNCHER_PACKAGE,
-                LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
-                GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
-                GOOGLE_TV_ASSISTANT_PACKAGE,
-                GOOGLE_SEARCH_PACKAGE,
-                AMAZON_LAUNCHER_PACKAGE
-            )
-        }
+        // Preserve capabilities Android granted from the manifest (especially
+        // canRetrieveWindowContent). Replacing this object with a new one
+        // discards those capabilities and leaves the service unable to read
+        // recommendation titles on some Android/Google TV versions.
+        val info = serviceInfo ?: AccessibilityServiceInfo()
+        info.eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or
+            AccessibilityEvent.TYPE_VIEW_SELECTED or
+            AccessibilityEvent.TYPE_VIEW_FOCUSED
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        info.notificationTimeout = 100
+        info.packageNames = arrayOf(
+            GOOGLE_TV_LAUNCHER_PACKAGE,
+            LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
+            GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
+            GOOGLE_TV_ASSISTANT_PACKAGE,
+            GOOGLE_SEARCH_PACKAGE,
+            AMAZON_LAUNCHER_PACKAGE
+        )
+        serviceInfo = info
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

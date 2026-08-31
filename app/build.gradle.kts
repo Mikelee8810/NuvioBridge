@@ -34,7 +34,9 @@ android {
         applicationId = "com.tunombre.tvbridge"
         minSdk = 24
         targetSdk = 36
-        versionCode = ciBuildNumber ?: 1
+        // Keep CI builds above the older subscription builds (which reached
+        // versionCode 59) so Android accepts this free build as an upgrade.
+        versionCode = ciBuildNumber?.let { 1000 + it } ?: 1000
         versionName = if (ciBuildNumber != null) "1.0.$ciBuildNumber" else "1.0"
 
         buildConfigField(
