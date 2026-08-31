@@ -79,7 +79,7 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             TAG,
             "Event type=$eventType package=$packageName class=${event.className} " +
                 "description=${event.contentDescription?.toString()?.take(160)} " +
-                "text=${event.text.joinToString(limit = 3, truncated = "…") { it.toString() }}"
+                "text=${AccessibilityEventTextFormatter.format(event.text)}"
         )
         if (packageName !in setOf(
                 GOOGLE_TV_LAUNCHER_PACKAGE,

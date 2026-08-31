@@ -42,4 +42,12 @@ class ForegroundRedirectPolicyTest {
         assertTrue(ForegroundRedirectPolicy.isYoutubePackage("com.google.android.apps.youtube.leanback"))
         assertFalse(ForegroundRedirectPolicy.isYoutubePackage("org.smarttube.stable"))
     }
+
+    @Test
+    fun `formats accessibility text even when an app supplies null entries`() {
+        assertTrue(
+            AccessibilityEventTextFormatter.format(listOf("Video", null, "Playing"))
+                .contains("Video")
+        )
+    }
 }
