@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.Executors
@@ -97,6 +98,11 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             // YouTube/Netflix/etc. pasaron a primer plano (y mandarlas de
             // vuelta a Home) necesitamos ver los cambios de ventana de
             // cualquier app, no solo del launcher.
+
+            // Necesario para poder interceptar el botón físico de Power del
+            // mando (ver onKeyEvent) y mostrar el menú de apagado/reinicio en
+            // vez de dejar que apague la pantalla.
+            flags = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
         }
 
         // Refresca la verificación de suscripción en segundo plano al
@@ -284,6 +290,26 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             Log.d(TAG, "IMDb ID resuelto: $title -> ${match.imdbId} (${match.type})")
             StremioLauncher.open(this, match)
         }
+    }
+
+    // Intercepta el botón físico de Power del mando. Por defecto, mantenerlo
+    // pulsado (o incluso una pulsación corta en algunos mandos de Chromecast
+    // con Google TV) apaga la pantalla, lo que hace imposible capturarlo en
+    // apps como Button Mapper (al pulsarlo para "grabarlo", la pantalla se
+    // apaga antes de que puedan detectar la pulsación). Como servicio de
+    // accesibilidad sí podemos leer el evento de tecla antes que el sistema,
+    // así que lo consumimos y mostramos directamente el menú de
+    // apagado/reinicio en su lugar.
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_POWER) return super.onKeyEvent(event)
+        if (!Preferences.isPowerButtonRemapEnabled(this)) return super.onKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
+        }
+        // Devolver true en todas las acciones (down/up) de esta tecla evita
+        // que el sistema procese también su comportamiento normal (apagar
+        // pantalla).
+        return true
     }
 
     override fun onInterrupt() {

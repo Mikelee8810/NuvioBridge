@@ -17,6 +17,7 @@ object Preferences {
     private const val PREFS_NAME = "tvbridge_prefs"
     private const val KEY_PLAYER_APP = "player_app"
     private const val KEY_YOUTUBE_REDIRECT_ENABLED = "youtube_redirect_enabled"
+    private const val KEY_POWER_BUTTON_REMAP_ENABLED = "power_button_remap_enabled"
 
     fun getSelectedApp(context: Context): PlayerApp {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -45,6 +46,20 @@ object Preferences {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_YOUTUBE_REDIRECT_ENABLED, enabled)
+            .apply()
+    }
+
+    // Desactivado por defecto: remapear un botón físico es algo más
+    // intrusivo (deja de poder apagar la pantalla con él), así que el
+    // usuario lo activa explícitamente desde los ajustes.
+    fun isPowerButtonRemapEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_POWER_BUTTON_REMAP_ENABLED, false)
+
+    fun setPowerButtonRemapEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_POWER_BUTTON_REMAP_ENABLED, enabled)
             .apply()
     }
 }

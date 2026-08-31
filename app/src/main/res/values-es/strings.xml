@@ -32,6 +32,8 @@
     <string name="main_stremio_label">Stremio</string>
     <string name="main_youtube_redirect_title">YouTube</string>
     <string name="main_youtube_redirect_toggle">Redirigir los vídeos de YouTube a SmartTube</string>
+    <string name="main_power_button_title">Botón de encendido del mando</string>
+    <string name="main_power_button_toggle">Mostrar el menú de apagado/reinicio en vez de apagar la pantalla</string>
     <string name="main_open_accessibility_settings">Activar el servicio en Accesibilidad</string>
     <string name="main_accessibility_settings_unavailable">No se pudo abrir Ajustes de Accesibilidad automáticamente en este dispositivo — abre Ajustes manualmente y busca StreamBridge dentro de Accesibilidad.</string>
 

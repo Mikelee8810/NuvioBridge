@@ -48,6 +48,7 @@ class MainActivity : Activity() {
         setupPaymentLinks()
         setupPlayerAppSelector()
         setupYoutubeRedirectToggle()
+        setupPowerButtonRemapToggle()
 
         findViewById<Button>(R.id.button_accessibility_settings).setOnClickListener {
             // En algunos launchers de terceros (p.ej. Fire TV) el sistema
@@ -103,6 +104,14 @@ class MainActivity : Activity() {
         checkbox.isChecked = Preferences.isYoutubeRedirectEnabled(this)
         checkbox.setOnCheckedChangeListener { _, isChecked ->
             Preferences.setYoutubeRedirectEnabled(this, isChecked)
+        }
+    }
+
+    private fun setupPowerButtonRemapToggle() {
+        val checkbox = findViewById<CheckBox>(R.id.checkbox_power_button_remap)
+        checkbox.isChecked = Preferences.isPowerButtonRemapEnabled(this)
+        checkbox.setOnCheckedChangeListener { _, isChecked ->
+            Preferences.setPowerButtonRemapEnabled(this, isChecked)
         }
     }
 

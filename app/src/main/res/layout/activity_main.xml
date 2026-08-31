@@ -240,6 +240,25 @@
             android:textSize="16sp"
             android:padding="12dp" />
 
+        <!-- Botón de Power del mando -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/main_power_button_title"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
+        <CheckBox
+            android:id="@+id/checkbox_power_button_remap"
+            android:layout_width="280dp"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"
+            android:text="@string/main_power_button_toggle"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:padding="12dp" />
+
         <Button
             android:id="@+id/button_accessibility_settings"
             android:layout_width="wrap_content"
