@@ -50,4 +50,20 @@ class ForegroundRedirectPolicyTest {
                 .contains("Video")
         )
     }
+
+    @Test
+    fun `recognizes the Play Store YouTube install screen opened by a Home card`() {
+        assertTrue(
+            ForegroundRedirectPolicy.isYoutubeInstallScreen(
+                packageName = "com.android.vending",
+                visibleTexts = listOf("YouTube for Android TV", "Install")
+            )
+        )
+        assertFalse(
+            ForegroundRedirectPolicy.isYoutubeInstallScreen(
+                packageName = "com.android.vending",
+                visibleTexts = listOf("Netflix", "Install")
+            )
+        )
+    }
 }

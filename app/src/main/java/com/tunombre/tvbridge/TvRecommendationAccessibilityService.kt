@@ -185,16 +185,7 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         val foregroundPackage = event.packageName?.toString() ?: return
 
         if (ForegroundRedirectPolicy.isYoutubePackage(foregroundPackage)) {
-            val now = System.currentTimeMillis()
-            if (now - lastYoutubeRedirectAt >= YOUTUBE_REDIRECT_DEBOUNCE_MS) {
-                lastYoutubeRedirectAt = now
-                Log.d(TAG, "Official YouTube opened; redirecting to SmartTube")
-                performGlobalAction(GLOBAL_ACTION_HOME)
-                mainHandler.postDelayed(
-                    { YoutubeRedirect.openSmartTube(this) },
-                    HOME_TO_SMARTTUBE_DELAY_MS
-                )
-            }
+            redirectToSmartTube("Official YouTube opened")
             return
         }
 
@@ -202,7 +193,30 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
         if (ForegroundRedirectPolicy.shouldBlockUnexpectedApp(foregroundPackage, redirectPending)) {
             Log.d(TAG, "Blocking original provider during Nuvio redirect: $foregroundPackage")
             performGlobalAction(GLOBAL_ACTION_HOME)
+            return
         }
+
+        if (foregroundPackage == "com.android.vending") {
+            mainHandler.postDelayed({
+                val visibleTexts = mutableListOf<String>()
+                rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+                if (ForegroundRedirectPolicy.isYoutubeInstallScreen(foregroundPackage, visibleTexts)) {
+                    redirectToSmartTube("YouTube Play Store install screen opened")
+                }
+            }, 500L)
+        }
+    }
+
+    private fun redirectToSmartTube(reason: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastYoutubeRedirectAt < YOUTUBE_REDIRECT_DEBOUNCE_MS) return
+        lastYoutubeRedirectAt = now
+        Log.d(TAG, "$reason; redirecting to SmartTube")
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        mainHandler.postDelayed(
+            { YoutubeRedirect.openSmartTube(this) },
+            HOME_TO_SMARTTUBE_DELAY_MS
+        )
     }
 
     private fun handleGoogleTvSearchRoute(cachedTitle: String? = null, attempt: Int = 0) {

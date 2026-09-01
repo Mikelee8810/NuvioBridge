@@ -20,6 +20,10 @@ object ForegroundRedirectPolicy {
 
     fun isYoutubePackage(packageName: String): Boolean = packageName in youtubePackages
 
+    fun isYoutubeInstallScreen(packageName: String, visibleTexts: List<String>): Boolean =
+        packageName == "com.android.vending" &&
+            visibleTexts.any { it.contains("YouTube for Android TV", ignoreCase = true) }
+
     fun shouldBlockUnexpectedApp(packageName: String, redirectPending: Boolean): Boolean =
         redirectPending && packageName !in allowedDuringNuvioRedirect
 }
