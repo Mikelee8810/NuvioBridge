@@ -37,8 +37,10 @@ class ForegroundRedirectPolicyTest {
     }
 
     @Test
-    fun `recognizes official YouTube TV packages`() {
-        assertTrue(ForegroundRedirectPolicy.isYoutubePackage("com.google.android.youtube.tv"))
+    fun `redirects official YouTube apps but leaves ATV bridge alone`() {
+        // This package is provided by ATV SmartTube Bridge. Redirecting it here
+        // discards the exact video URI before the bridge can hand it to SmartTube.
+        assertFalse(ForegroundRedirectPolicy.isYoutubePackage("com.google.android.youtube.tv"))
         assertTrue(ForegroundRedirectPolicy.isYoutubePackage("com.google.android.apps.youtube.leanback"))
         assertFalse(ForegroundRedirectPolicy.isYoutubePackage("org.smarttube.stable"))
     }

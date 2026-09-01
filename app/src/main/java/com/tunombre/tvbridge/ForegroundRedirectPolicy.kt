@@ -2,7 +2,6 @@ package com.tunombre.tvbridge
 
 object ForegroundRedirectPolicy {
     private val youtubePackages = setOf(
-        "com.google.android.youtube.tv",
         "com.google.android.youtube",
         "com.google.android.apps.youtube.leanback"
     )
