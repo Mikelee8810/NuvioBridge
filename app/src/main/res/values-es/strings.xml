@@ -1,36 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TvRecommendationBridge</string>
+    <string name="app_name">NuvioBridge</string>
     <string name="accessibility_service_description">
-        Detecta clics en recomendaciones de películas del launcher de Android TV
-        y abre directamente la ficha correspondiente en Nuvio o Stremio.
+        Detecta clics en recomendaciones de películas y series del launcher de TV
+        y abre directamente el título correspondiente en Nuvio.
     </string>
-    <string name="main_subtitle">Pulsa una recomendación del launcher y ábrela directamente en tu app favorita</string>
+    <string name="main_subtitle">Abre las recomendaciones de Google TV directamente en Nuvio.</string>
 
-    <string name="main_subscription_title">Suscripción</string>
-    <string name="main_subscription_unknown">Introduce el email con el que pagaste y pulsa Verificar</string>
-    <string name="main_subscription_checking">Verificando…</string>
-    <string name="main_subscription_active">Suscripción activa (%1$s)</string>
-    <string name="main_subscription_not_subscribed">Ese email no tiene ninguna suscripción activa</string>
-    <string name="main_subscription_device_mismatch">Ese email ya está en uso en otro dispositivo. Podrás moverlo aquí en %1$d días</string>
-    <string name="main_subscription_trial_already_used">Este dispositivo ya usó su prueba gratuita con otro email. Necesitas una suscripción activa para usarlo aquí</string>
-    <string name="main_subscription_error">No se pudo verificar (revisa tu conexión) e inténtalo de nuevo</string>
-    <string name="main_email_hint">tu@email.com</string>
-    <string name="main_verify_button">Verificar suscripción</string>
-    <string name="main_payment_hint">Escanea con el móvil y paga con este mismo email:</string>
-    <string name="main_monthly_label">2,50 €/mes</string>
-    <string name="main_monthly_trial_note">Prueba gratis de 2 días si no la has usado ya — sin tarjeta</string>
-    <string name="main_semiannual_label">7,99 €/6 meses</string>
-    <string name="main_annual_label">12,99 €/año</string>
-    <string name="main_lifetime_label">19,99 € pago único</string>
-    <string name="main_not_configured">(sin configurar)</string>
-
-    <string name="main_choose_app">Abrir siempre en:</string>
-    <string name="main_nuvio_label">Nuvio</string>
-    <string name="main_stremio_label">Stremio</string>
-    <string name="main_open_accessibility_settings">Activar el servicio en Accesibilidad</string>
-    <string name="main_accessibility_settings_unavailable">No se pudo abrir Ajustes de Accesibilidad automáticamente en este dispositivo — abre Ajustes manualmente y busca TvRecommendationBridge dentro de Accesibilidad.</string>
-
-    <string name="main_credits_title">Créditos</string>
-    <string name="main_tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="main_ready_message">No se necesita cuenta, suscripción ni pago.</string>
+    <string name="main_open_accessibility_settings">Activar NuvioBridge en Accesibilidad</string>
+    <string name="main_setup_hint">Después de activar el servicio, vuelve a Google TV y selecciona una recomendación.</string>
+    <string name="main_accessibility_settings_unavailable">No se pudieron abrir los ajustes de Accesibilidad automáticamente; abre Ajustes y busca NuvioBridge en Accesibilidad.</string>
+    <string name="main_credits_title">TMDB</string>
+    <string name="main_tmdb_attribution">Este producto usa la API de TMDB, pero no está respaldado ni certificado por TMDB.</string>
 </resources>

@@ -2,6 +2,7 @@ package com.tunombre.tvbridge
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -10,117 +11,162 @@ import android.view.accessibility.AccessibilityNodeInfo
 import java.util.concurrent.Executors
 
 /**
- * Servicio de accesibilidad que escucha clics en el launcher de Google TV
- * (com.google.android.apps.tv.launcherx) y en el de Fire TV
- * (com.amazon.tv.launcher).
- *
- * Comportamiento:
- *  - No hace nada si no hay una suscripción verificada vigente (ver
- *    [LicenseManager]).
- *  - Si el nodo pulsado es una tarjeta de película/serie recomendada
- *    (detectado por patrones típicos del content-desc, como "cuesta:" o
- *    "puntuación:"), extrae el título, lo resuelve a un IMDb ID vía TMDb,
- *    y abre la app elegida (Nuvio o Stremio) directamente en la ficha de
- *    esa película o serie.
- *  - Para cualquier otro clic (iconos de apps, fila "Tus aplicaciones",
- *    etc.) no hace absolutamente nada: el sistema procesa el clic con su
- *    comportamiento normal.
+ * Accessibility service that listens for recommendation clicks in Google TV
+ * and Fire TV launchers, resolves the selected title through TMDB, and opens
+ * the matching movie or series directly in Nuvio.
  */
 class TvRecommendationAccessibilityService : AccessibilityService() {
 
-    // Un solo hilo de fondo para las llamadas de red (TMDb), para no
-    // bloquear nunca el hilo principal del servicio de accesibilidad.
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingGoogleTvSearchTitle: String? = null
+    private var pendingSemanticDetailsClick = false
+    @Volatile private var pendingNuvioRedirectDeadline = 0L
+    @Volatile private var lastYoutubeRedirectAt = 0L
 
     companion object {
         private const val TAG = "TvRecService"
-
-        // Marcadores que separan el título del resto del content-desc en las
-        // tarjetas de fila. Usarlos para cortar (en vez de la primera coma)
-        // evita truncar títulos que ya traen coma de por sí, como
-        // "Monstruos, S.A." (cortar por la primera coma daría solo "Monstruos").
         private val TITLE_MARKERS = listOf("cuesta:", "se necesita una suscripción a", "puntuación:")
-
         private const val AMAZON_LAUNCHER_PACKAGE = "com.amazon.tv.launcher"
         private const val GOOGLE_TV_LAUNCHER_PACKAGE = "com.google.android.apps.tv.launcherx"
-
-        // En las tarjetas de contenido del launcher de Fire TV, el título vive
-        // en el content-desc de este ImageView hijo, no en el nodo pulsado
-        // (que siempre tiene content-desc vacío). Los iconos de apps normales
-        // usan el mismo resource-id pero con content-desc vacío, lo que sirve
-        // para distinguir tarjetas de contenido real de iconos de apps sin
-        // necesitar una lista de apps conocidas.
+        private const val LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE = "com.google.android.tvlauncher"
+        private const val GOOGLE_TV_RECOMMENDATIONS_PACKAGE = "com.google.android.tvrecommendations"
+        private const val GOOGLE_TV_ASSISTANT_PACKAGE = "com.google.android.katniss"
+        private const val GOOGLE_SEARCH_PACKAGE = "com.google.android.googlequicksearchbox"
         private const val FIRE_TV_MAIN_IMAGE_ID = "com.amazon.tv.launcher:id/main_image"
+        private const val SEARCH_DETAILS_RETRY_DELAY_MS = 250L
+        private const val SEARCH_DETAILS_MAX_ATTEMPTS = 8
+        private const val HOME_PROVIDER_SEARCH_START_DELAY_MS = 700L
+        private const val HOME_PROVIDER_SEARCH_RETRY_DELAY_MS = 500L
+        private const val HOME_PROVIDER_SEARCH_MAX_ATTEMPTS = 30
+        private const val NUVIO_REDIRECT_WINDOW_MS = 8_000L
+        private const val YOUTUBE_REDIRECT_DEBOUNCE_MS = 3_000L
+        private const val HOME_TO_SMARTTUBE_DELAY_MS = 350L
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
 
-        // Configuración programática del servicio: en este dispositivo (TCL,
-        // Android 12) el meta-data de accessibility_service_config.xml no se
-        // estaba aplicando en tiempo de ejecución (dumpsys accessibility
-        // mostraba capabilities=0, eventTypes= vacío pese a que el XML
-        // compilado en el APK era correcto). Configurarlo aquí evita
-        // depender de ese parseo.
-        serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED
-            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            notificationTimeout = 100
-            packageNames = arrayOf(GOOGLE_TV_LAUNCHER_PACKAGE, AMAZON_LAUNCHER_PACKAGE)
-        }
-
-        // Refresca la verificación de suscripción en segundo plano al
-        // arrancar el servicio, para que la caché (usada por isLikelyValid)
-        // no dependa solo de que el usuario abra MainActivity.
-        LicenseManager.getSavedEmail(this)?.let { email ->
-            backgroundExecutor.execute { LicenseManager.verifyNow(this, email) }
-        }
+        // Preserve capabilities Android granted from the manifest (especially
+        // canRetrieveWindowContent). Replacing this object with a new one
+        // discards those capabilities and leaves the service unable to read
+        // recommendation titles on some Android/Google TV versions.
+        val info = serviceInfo ?: AccessibilityServiceInfo()
+        info.eventTypes = AccessibilityEvent.TYPE_VIEW_CLICKED or
+            AccessibilityEvent.TYPE_VIEW_SELECTED or
+            AccessibilityEvent.TYPE_VIEW_FOCUSED or
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        info.notificationTimeout = 100
+        // All packages are required here so the service can notice and stop
+        // a provider app that Google TV opens after a recommendation click.
+        info.packageNames = null
+        serviceInfo = info
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return
-        if (!LicenseManager.isLikelyValid(this)) return
-
+        val eventType = event?.eventType ?: return
+        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            handleWindowStateChanged(event)
+            return
+        }
+        if (eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
+            eventType != AccessibilityEvent.TYPE_VIEW_SELECTED &&
+            eventType != AccessibilityEvent.TYPE_VIEW_FOCUSED
+        ) return
+        val packageName = event.packageName?.toString() ?: return
+        Log.d(
+            TAG,
+            "Event type=$eventType package=$packageName class=${event.className} " +
+                "description=${event.contentDescription?.toString()?.take(160)} " +
+                "text=${AccessibilityEventTextFormatter.format(event.text)}"
+        )
+        if (packageName !in setOf(
+                GOOGLE_TV_LAUNCHER_PACKAGE,
+                LEGACY_GOOGLE_TV_LAUNCHER_PACKAGE,
+                GOOGLE_TV_RECOMMENDATIONS_PACKAGE,
+                GOOGLE_TV_ASSISTANT_PACKAGE,
+                GOOGLE_SEARCH_PACKAGE,
+                AMAZON_LAUNCHER_PACKAGE
+            )) return
+        val homeProviderPlot = GoogleTvSearchTitleExtractor.homeProviderPlot(
+            packageName,
+            event.text.map { it.toString() }
+        )
+        if (eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && homeProviderPlot != null) {
+            Log.d(TAG, "Google TV home provider plot detected: $homeProviderPlot")
+            routeHomeProviderPlot(homeProviderPlot)
+            return
+        }
+        val isSearchRouteAction = GoogleTvSearchTitleExtractor.isDetailsAction(
+                packageName,
+                event.text.map { it.toString() }
+            ) || GoogleTvSearchTitleExtractor.isProviderAction(
+                packageName,
+                event.contentDescription?.toString()
+            )
+        if (eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+            if (isSearchRouteAction) {
+                pendingGoogleTvSearchTitle = readActiveGoogleTvSearchTitle()
+                Log.d(
+                    TAG,
+                    "Google TV search title cached: $pendingGoogleTvSearchTitle " +
+                        "instance=${System.identityHashCode(this)} thread=${Thread.currentThread().name}"
+                )
+            }
+            return
+        }
+        if (eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && isSearchRouteAction) {
+            if (pendingSemanticDetailsClick && GoogleTvSearchTitleExtractor.isDetailsAction(
+                    packageName,
+                    event.text.map { it.toString() }
+                )
+            ) {
+                pendingSemanticDetailsClick = false
+                Log.d(TAG, "Google TV semantic View details click consumed")
+                return
+            }
+            val cachedTitle = pendingGoogleTvSearchTitle
+            pendingGoogleTvSearchTitle = null
+            Log.d(
+                TAG,
+                "Google TV search title consumed: $cachedTitle " +
+                    "instance=${System.identityHashCode(this)} thread=${Thread.currentThread().name}"
+            )
+            handleGoogleTvSearchRoute(cachedTitle)
+            return
+        }
+        val isSearchSelection = eventType == AccessibilityEvent.TYPE_VIEW_SELECTED &&
+            packageName in setOf(GOOGLE_TV_ASSISTANT_PACKAGE, GOOGLE_SEARCH_PACKAGE)
+        if (eventType == AccessibilityEvent.TYPE_VIEW_SELECTED && !isSearchSelection) return
         if (event.packageName == AMAZON_LAUNCHER_PACKAGE) {
             val title = extractFireTvTitle(event)
             if (!title.isNullOrBlank()) {
-                Log.d(TAG, "Película/serie detectada (Fire TV): $title")
+                Log.d(TAG, "Movie/show detected (Fire TV): $title")
                 handleMovieClick(title)
             }
             return
         }
 
-        // El content-desc de las tarjetas de recomendación del launcher viaja
-        // en event.contentDescription, NO en event.source.contentDescription
-        // (que siempre es null para estas tarjetas). Confirmado con logging
-        // en dispositivo real.
         val desc = event.contentDescription?.toString()
         if (!desc.isNullOrBlank()) {
-            if (isMovieOrShowCard(event, desc)) {
-                val title = extractTitle(desc)
+            if (isMovieOrShowCard(event, desc) || (isSearchSelection && desc.length > 1)) {
+                val title = if (isSearchSelection) extractSearchTitle(desc) else extractTitle(desc)
                 if (title.isNotBlank()) {
-                    Log.d(TAG, "Película/serie detectada: $title")
+                    Log.d(TAG, "Movie/show detected: $title")
                     handleMovieClick(title)
                 }
             }
             return
         }
 
-        // Cartel grande con autoplay (fila superior de "Inicio"): el título
-        // viaja en event.text, no en contentDescription. Formato:
-        // [Título, subtítulo, sinopsis, CTA]. Los patrocinados van primero
-        // con "Patrocinado" y se ignoran (no son recomendaciones reales).
         val heroTitle = extractHeroTitle(event)
         if (heroTitle != null) {
-            Log.d(TAG, "Película/serie detectada (cartel grande): $heroTitle")
+            Log.d(TAG, "Movie/show detected (hero): $heroTitle")
             handleMovieClick(heroTitle)
             return
         }
 
-        // Algunas filas (p.ej. RTVE en "Recomendaciones destacadas" de
-        // Inicio) rellenan el content-desc del nodo con retraso tras el
-        // clic: en el momento del evento aún está vacío. Reintentamos una
-        // vez, poco después, releyendo el nodo.
         val source = event.source ?: return
         Handler(Looper.getMainLooper()).postDelayed({
             source.refresh()
@@ -128,11 +174,153 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             if (!delayedDesc.isNullOrBlank() && isMovieOrShowCard(event, delayedDesc)) {
                 val title = extractTitle(delayedDesc)
                 if (title.isNotBlank()) {
-                    Log.d(TAG, "Película/serie detectada (retraso): $title")
+                    Log.d(TAG, "Movie/show detected (delayed): $title")
                     handleMovieClick(title)
                 }
             }
         }, 600)
+    }
+
+    private fun handleWindowStateChanged(event: AccessibilityEvent) {
+        val foregroundPackage = event.packageName?.toString() ?: return
+
+        if (ForegroundRedirectPolicy.isYoutubePackage(foregroundPackage)) {
+            redirectToSmartTube("Official YouTube opened")
+            return
+        }
+
+        val redirectPending = System.currentTimeMillis() <= pendingNuvioRedirectDeadline
+        if (ForegroundRedirectPolicy.shouldBlockUnexpectedApp(foregroundPackage, redirectPending)) {
+            Log.d(TAG, "Blocking original provider during Nuvio redirect: $foregroundPackage")
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            return
+        }
+
+        if (foregroundPackage == "com.android.vending") {
+            mainHandler.postDelayed({
+                val visibleTexts = mutableListOf<String>()
+                rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+                if (ForegroundRedirectPolicy.isYoutubeInstallScreen(foregroundPackage, visibleTexts)) {
+                    redirectToSmartTube("YouTube Play Store install screen opened")
+                }
+            }, 500L)
+        }
+    }
+
+    private fun redirectToSmartTube(reason: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastYoutubeRedirectAt < YOUTUBE_REDIRECT_DEBOUNCE_MS) return
+        lastYoutubeRedirectAt = now
+        Log.d(TAG, "$reason; redirecting to SmartTube")
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        mainHandler.postDelayed(
+            { YoutubeRedirect.openSmartTube(this) },
+            HOME_TO_SMARTTUBE_DELAY_MS
+        )
+    }
+
+    private fun handleGoogleTvSearchRoute(cachedTitle: String? = null, attempt: Int = 0) {
+        val title = cachedTitle ?: readActiveGoogleTvSearchTitle()
+        if (title != null) {
+            Log.d(TAG, "Movie/show detected (Google TV search): $title")
+            handleMovieClick(title)
+        } else if (attempt + 1 < SEARCH_DETAILS_MAX_ATTEMPTS) {
+            Handler(Looper.getMainLooper()).postDelayed(
+                { handleGoogleTvSearchRoute(attempt = attempt + 1) },
+                SEARCH_DETAILS_RETRY_DELAY_MS
+            )
+        } else {
+            Log.w(TAG, "Unable to read title from Google TV search details")
+        }
+    }
+
+    private fun routeHomeProviderPlot(plot: String) {
+        Handler(Looper.getMainLooper()).postDelayed({
+            val searchIntent = Intent("android.search.action.GLOBAL_SEARCH").apply {
+                setPackage(GOOGLE_TV_ASSISTANT_PACKAGE)
+                putExtra("query", plot)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                startActivity(searchIntent)
+                Log.d(TAG, "Google TV semantic search started: $plot")
+                readSemanticSearchResult(plot)
+            } catch (error: Exception) {
+                Log.e(TAG, "Unable to start Google TV semantic search", error)
+            }
+        }, HOME_PROVIDER_SEARCH_START_DELAY_MS)
+    }
+
+    private fun readSemanticSearchResult(
+        plot: String,
+        attempt: Int = 0,
+        detailsRequested: Boolean = false
+    ) {
+        val visibleTexts = mutableListOf<String>()
+        val root = rootInActiveWindow
+        root?.let { collectVisibleTexts(it, visibleTexts) }
+        val responseMatchesQuery = GoogleTvSearchTitleExtractor.isSemanticResponseForQuery(
+            plot,
+            visibleTexts
+        )
+        val title = if (responseMatchesQuery) {
+            GoogleTvSearchTitleExtractor.semanticResultTitle(plot, visibleTexts)
+        } else {
+            null
+        }
+            ?: if (detailsRequested) {
+                GoogleTvSearchTitleExtractor.entityDetailsTitle(plot, visibleTexts)
+            } else {
+                null
+            }
+        if (title != null) {
+            Log.d(TAG, "Google TV semantic search resolved: $plot -> $title")
+            handleMovieClick(title)
+        } else if (attempt + 1 < HOME_PROVIDER_SEARCH_MAX_ATTEMPTS) {
+            var nextDetailsRequested = detailsRequested
+            if (!detailsRequested && responseMatchesQuery && root != null && clickViewDetails(root)) {
+                nextDetailsRequested = true
+                Log.d(TAG, "Google TV semantic View details opened")
+            }
+            Handler(Looper.getMainLooper()).postDelayed(
+                { readSemanticSearchResult(plot, attempt + 1, nextDetailsRequested) },
+                HOME_PROVIDER_SEARCH_RETRY_DELAY_MS
+            )
+        } else {
+            Log.w(TAG, "Unable to resolve Google TV home provider plot: $plot")
+        }
+    }
+
+    private fun clickViewDetails(root: AccessibilityNodeInfo): Boolean {
+        val detailsButton = root.findAccessibilityNodeInfosByText("View details")
+            .firstOrNull {
+                it.text?.toString()?.equals("View details", ignoreCase = true) == true &&
+                    it.isClickable
+            } ?: return false
+        pendingSemanticDetailsClick = true
+        val clicked = detailsButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        if (!clicked) pendingSemanticDetailsClick = false
+        return clicked
+    }
+
+    private fun readActiveGoogleTvSearchTitle(): String? {
+        val visibleTexts = mutableListOf<String>()
+        rootInActiveWindow?.let { collectVisibleTexts(it, visibleTexts) }
+        return GoogleTvSearchTitleExtractor.extract(visibleTexts)
+    }
+
+    private fun collectVisibleTexts(node: AccessibilityNodeInfo, output: MutableList<String>) {
+        node.text?.toString()?.trim()?.takeIf { it.isNotBlank() }?.let(output::add)
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { collectVisibleTexts(it, output) }
+        }
+    }
+
+    private fun extractSearchTitle(contentDesc: String): String {
+        return contentDesc
+            .substringBefore("\n")
+            .substringBefore(",")
+            .trim()
     }
 
     private fun extractFireTvTitle(event: AccessibilityEvent): String? {
@@ -164,18 +352,10 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
     }
 
     private fun isMovieOrShowCard(event: AccessibilityEvent, contentDesc: String): Boolean {
-        if (TITLE_MARKERS.any { contentDesc.contains(it) }) {
-            return true
-        }
-
-        // Otros formatos sin marcador de precio/puntuación:
-        //  - Carteles grandes ("Google TV") de Películas/Series: "{Título}, {sinopsis}".
-        //  - Plataformas gratuitas, p.ej. RTVE Play: "{Título}, RTVE Play".
-        // Ambos son "{Título}, {resto}" en una tarjeta real android.view.View
-        // sin texto propio. Los banners/anuncios (p.ej. "Netflix, Ver ahora")
-        // son android.view.ViewGroup y sí traen texto ("VER AHORA") — así los
-        // distinguimos sin necesitar una lista de plataformas conocidas.
-        if (event.className != "android.view.View") return false
+        if (TITLE_MARKERS.any { contentDesc.contains(it) }) return true
+        if (event.className != "android.view.View" &&
+            event.className != "android.view.ViewGroup"
+        ) return false
         if (!event.text.isNullOrEmpty()) return false
         val commaIndex = contentDesc.indexOf(',')
         if (commaIndex <= 0) return false
@@ -192,24 +372,29 @@ class TvRecommendationAccessibilityService : AccessibilityService() {
             return contentDesc.substring(0, markerIndex).trim().trimEnd(',').trim()
         }
 
-        // Formato de cartel grande sin marcador: "{Título}, {sinopsis}".
         return contentDesc.substringBefore(",").trim()
     }
 
     private fun handleMovieClick(title: String) {
+        // Stop the launcher's original provider immediately, before the TMDB
+        // lookup completes. Window-state monitoring covers providers that win
+        // the race and open a moment after this Home action.
+        pendingNuvioRedirectDeadline = System.currentTimeMillis() + NUVIO_REDIRECT_WINDOW_MS
+        performGlobalAction(GLOBAL_ACTION_HOME)
+
         backgroundExecutor.execute {
             val match = TmdbClient.findImdbId(title)
             if (match == null) {
-                Log.w(TAG, "No se pudo resolver IMDb ID para: $title")
+                Log.w(TAG, "Unable to resolve IMDb ID for: $title")
                 return@execute
             }
-            Log.d(TAG, "IMDb ID resuelto: $title -> ${match.imdbId} (${match.type})")
-            StremioLauncher.open(this, match)
+            Log.d(TAG, "IMDb ID resolved: $title -> ${match.imdbId} (${match.type})")
+            NuvioLauncher.open(this, match)
         }
     }
 
     override fun onInterrupt() {
-        Log.d(TAG, "Servicio interrumpido")
+        Log.d(TAG, "Service interrupted")
     }
 
     override fun onDestroy() {

@@ -11,60 +11,38 @@ val localProperties = Properties().apply {
     }
 }
 
+fun buildSetting(name: String): String? =
+    localProperties.getProperty(name) ?: System.getenv(name)
+
+val releaseStoreFilePath = buildSetting("RELEASE_STORE_FILE")
+val releaseStorePassword = buildSetting("RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = buildSetting("RELEASE_KEY_ALIAS")
+val releaseKeyPassword = buildSetting("RELEASE_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
+val ciBuildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+
 android {
     namespace = "com.tunombre.tvbridge"
-    compileSdk {
-        version = release(37) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.tunombre.tvbridge"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // Keep CI builds above the older subscription builds (which reached
+        // versionCode 59) so Android accepts this free build as an upgrade.
+        versionCode = ciBuildNumber?.let { 1000 + it } ?: 1000
+        versionName = if (ciBuildNumber != null) "1.0.$ciBuildNumber" else "1.0"
 
-        // Se lee de local.properties (no versionado). Consigue la tuya
-        // gratis en https://www.themoviedb.org/settings/api
         buildConfigField(
             "String",
             "TMDB_API_KEY",
-            "\"${localProperties.getProperty("TMDB_API_KEY", "")}\""
-        )
-
-        // URL del backend de verificación de suscripción (ver carpeta
-        // TvRecommendationBridge-backend/), p.ej. https://tu-proyecto.vercel.app
-        buildConfigField(
-            "String",
-            "LICENSE_API_URL",
-            "\"${localProperties.getProperty("LICENSE_API_URL", "")}\""
-        )
-
-        // Payment Links de Stripe (Dashboard → Payment links) — uno por
-        // precio, ya que Stripe no permite mezclar intervalos distintos
-        // (mensual/semestral/anual) en un mismo Payment Link. El usuario
-        // paga desde el móvil/PC con el mismo email que verificará en el TV.
-        buildConfigField(
-            "String",
-            "MONTHLY_PAYMENT_URL",
-            "\"${localProperties.getProperty("MONTHLY_PAYMENT_URL", "")}\""
-        )
-        buildConfigField(
-            "String",
-            "SEMIANNUAL_PAYMENT_URL",
-            "\"${localProperties.getProperty("SEMIANNUAL_PAYMENT_URL", "")}\""
-        )
-        buildConfigField(
-            "String",
-            "ANNUAL_PAYMENT_URL",
-            "\"${localProperties.getProperty("ANNUAL_PAYMENT_URL", "")}\""
-        )
-        buildConfigField(
-            "String",
-            "LIFETIME_PAYMENT_URL",
-            "\"${localProperties.getProperty("LIFETIME_PAYMENT_URL", "")}\""
+            "\"${localProperties.getProperty("TMDB_API_KEY", System.getenv("TMDB_API_KEY") ?: "")}\""
         )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -76,12 +54,11 @@ android {
 
     signingConfigs {
         create("release") {
-            val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE")
-            if (storeFilePath != null) {
-                storeFile = rootProject.file(storeFilePath)
-                storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
-                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
-                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(releaseStoreFilePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -91,15 +68,12 @@ android {
             optimization {
                 enable = false
             }
-            // Solo firma con la config de release si local.properties trae
-            // la keystore configurada; si no, deja el build sin firmar en
-            // vez de fallar (para que `assembleDebug` siga funcionando en
-            // checkouts nuevos sin keystore).
-            if (localProperties.getProperty("RELEASE_STORE_FILE") != null) {
+            if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -111,9 +85,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    // Solo el "core" de ZXing (generar QR), no la librería completa de
-    // escaneo — no hace falta cámara para esto.
-    implementation("com.google.zxing:core:3.5.3")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
